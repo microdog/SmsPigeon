@@ -443,6 +443,7 @@ local function cmd_ch_on(cfg, args, sender)
     local key = channel_of(args[1])
     if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱/企业微信" end
     local ch = sp_channels.get(key)
+    if not ch then return "ERROR:未知通道" end   -- 防御：别名有效但通道未注册
     if not ch.is_configured(cfg.fwd[key]) then
         return "ERROR:" .. ch.name .. " 未配置,请先设置"
     end
@@ -455,6 +456,7 @@ local function cmd_ch_off(cfg, args, sender)
     local key = channel_of(args[1])
     if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱/企业微信" end
     local ch = sp_channels.get(key)
+    if not ch then return "ERROR:未知通道" end   -- 防御：别名有效但通道未注册
     cfg.fwd[key].on = false
     sp_config.save()
     return "OK:" .. ch.name .. "转发已关闭"
@@ -464,6 +466,7 @@ local function cmd_ch_clr(cfg, args, sender)
     local key = channel_of(args[1])
     if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱/企业微信" end
     local ch = sp_channels.get(key)
+    if not ch then return "ERROR:未知通道" end   -- 防御：别名有效但通道未注册
     -- 重置为该通道的默认配置形状：整体替换会丢字段（曾因 { on=false }
     -- 丢掉 targets，导致后续 增加转发号码 ipairs(nil) 抛错）
     cfg.fwd[key] = sp_config.defaults().fwd[key]

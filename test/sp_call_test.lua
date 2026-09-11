@@ -104,6 +104,22 @@ base = run_new_tasks(base)
 -- 累计 11 = 8 + 来电提醒查询应答 + 开启应答 + 恢复的提醒
 eq(#MOCKS.sent, 11, "重新开启后来电恢复提醒")
 
+-- 网络通道的来电文案（format_text 纯函数，无 HTTP 桩）
+local sp_channels = require "sp_channels"
+local ft = sp_channels.format_text({
+    kind = "call", sender = "13712345678",
+    time = "2026-09-11 12:00:00", prefix = "", identity = "",
+})
+assert(ft:find("来电提醒", 1, true) and ft:find("13712345678", 1, true),
+    "网络通道来电文案含提醒与号码")
+n = n + 1
+assert(sp_channels.format_text({
+    kind = "call", sender = "13712345678", time = "t",
+    prefix = "【x】", identity = "abcd",
+}):find("【x】来电提醒:号码 13712345678 [设备:abcd]", 1, true),
+    "来电文案携带前缀与设备标识")
+n = n + 1
+
 -- 开关持久化：重载模块后仍为关闭态（此处为开启态校验往返）
 MOCKS.sms_cb("13800138000", "信鸽，关闭来电提醒")
 run_new_tasks(base)
