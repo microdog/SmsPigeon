@@ -29,7 +29,7 @@
 |---|---|
 | `test/mocks.lua` | LuatOS 全局 API 内存桩（fskv 深拷贝语义、mobile 可变桩） |
 | `test/run_tests.lua` | 运行器：每文件独立桩+模块缓存；`test/run_with_lupa.py` 为 Windows 入口 |
-| `test/sp_at_test.lua` | 解析器：AT/密码前缀、边界与非法输入 |
+| `test/sp_at_test.lua` | 解析器：鸽+/密码前缀、边界与非法输入、AT 前缀移除断言 |
 | `test/sp_auth_test.lua` | 归一化、白名单、门禁组合 |
 | `test/sp_config_test.lua` | 默认值、持久化往返、损坏数据容错、恢复出厂 |
 | `test/sp_commands_test.lua` | 初始化/门禁/白名单/密码/通道命令全流程、AND 语义、防锁死 |

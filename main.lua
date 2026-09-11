@@ -22,8 +22,8 @@ SmsPigeon（短信鸽）：全本地运行的 Air780EHV 短信转发固件。
 
 快速上手：
   1. 用 Luatools 烧录本工程脚本 + Air780EHV LuatOS 固件（V2018+）；
-  2. 插卡开机，从你的手机向模块发送短信 AT+INIT=<模块IMEI>；
-  3. 收到 OK 应答后，用 AT+HELP? 查看全部命令。
+  2. 插卡开机，从你的手机向模块发送短信 鸽+INIT=<模块IMEI>；
+  3. 收到 OK 应答后，用 鸽+HELP? 查看全部命令。
 
 完整文档：README.md 与 docs/commands.md
 ]]

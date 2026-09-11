@@ -42,7 +42,7 @@ eq(MOCKS.sms_debug, true, "内核短信调试日志已开启(sms.debug)")
 
 -- 未初始化：命令无应答、普通短信不转发
 local base = #MOCKS.tasks
-MOCKS.sms_cb("13800138000", "AT+ST?")
+MOCKS.sms_cb("13800138000", "鸽+ST?")
 base = run_new_tasks(base)
 eq(#MOCKS.sent, 0, "未初始化:命令无应答")
 MOCKS.sms_cb("13800138000", "普通短信")
@@ -50,7 +50,7 @@ base = run_new_tasks(base)
 eq(#MOCKS.sent, 0, "未初始化:普通短信不转发不回复")
 
 -- 初始化：完整链路收命令、发应答
-MOCKS.sms_cb("13800138000", "AT+INIT=" .. MOCKS.mobile.imei)
+MOCKS.sms_cb("13800138000", "鸽+INIT=" .. MOCKS.mobile.imei)
 base = run_new_tasks(base)
 eq(#MOCKS.sent, 1, "INIT应答已发出")
 eq(MOCKS.sent[1].num, "13800138000", "应答发回命令发送者")
@@ -58,10 +58,10 @@ assert(MOCKS.sent[1].text:find("已初始化", 1, true), "应答内容为初始�
 n = n + 1
 
 -- 初始化后：命令可探测
-MOCKS.sms_cb("13800138000", "AT")
+MOCKS.sms_cb("13800138000", "鸽")
 base = run_new_tasks(base)
-eq(#MOCKS.sent, 2, "AT探测应答已发出")
-assert(MOCKS.sent[2].text:find("OK", 1, true), "AT应答为OK")
+eq(#MOCKS.sent, 2, "鸽探测应答已发出")
+assert(MOCKS.sent[2].text:find("OK", 1, true), "鸽应答为OK")
 n = n + 1
 
 -- 初始化后：普通短信走转发（无通道配置 → 无发送、无报错）

@@ -6,23 +6,23 @@
 @usage
 命令总览（详见 docs/commands.md）：
 
-  AT                        链路探测
-  AT+HELP?                  命令列表
-  AT+INIT=<IMEI>            初始化（未初始化状态唯一可用命令，发送者入白名单）
-  AT+VER?                   固件版本
-  AT+ST?                    状态总览
-  AT+WL?                    查看白名单
-  AT+WL=ON/OFF              白名单开关
-  AT+WL=ADD/DEL,号码        白名单增删
-  AT+PW=<新密码> / AT+PW=    设置/清除密码
-  AT+FWD?                   查看转发通道
-  AT+FWD=SMS,ADD/DEL,号码   短信转发目标
-  AT+FWD=DING,SET,webhook[,secret]
-  AT+FWD=FS,SET,webhook[,secret]
-  AT+FWD=SC,SET,sendkey
-  AT+FWD=<通道>,ON/OFF/CLR  通道开关/清空配置
-  AT+RESET                  恢复出厂（回到未初始化）
-  AT+REBOOT                 重启模组
+  鸽                        链路探测
+  鸽+HELP?                  命令列表
+  鸽+INIT=<IMEI>            初始化（未初始化状态唯一可用命令，发送者入白名单）
+  鸽+VER?                   固件版本
+  鸽+ST?                    状态总览
+  鸽+WL?                    查看白名单
+  鸽+WL=ON/OFF              白名单开关
+  鸽+WL=ADD/DEL,号码        白名单增删
+  鸽+PW=<新密码> / 鸽+PW=    设置/清除密码
+  鸽+FWD?                   查看转发通道
+  鸽+FWD=SMS,ADD/DEL,号码   短信转发目标
+  鸽+FWD=DING,SET,webhook[,secret]
+  鸽+FWD=FS,SET,webhook[,secret]
+  鸽+FWD=SC,SET,sendkey
+  鸽+FWD=<通道>,ON/OFF/CLR  通道开关/清空配置
+  鸽+RESET                  恢复出厂（回到未初始化）
+  鸽+REBOOT                 重启模组
 
 鉴权流程见 sp_auth；应答统一通过短信回复给命令发送者。
 本模块依赖 sp_platform（硬件访问）与 sp_channels（通道注册表）。
@@ -45,8 +45,8 @@ local CH_ALIAS = {
 }
 
 -- 用法说明文本（HELP/用法应答复用）
-local USAGE_WL  = "AT+WL?|AT+WL=ON/OFF|AT+WL=ADD,号码|AT+WL=DEL,号码"
-local USAGE_FWD = "AT+FWD?|AT+FWD=SMS,ADD/DEL,号码|AT+FWD=DING/FS,SET,webhook[,secret]|AT+FWD=SC,SET,sendkey|AT+FWD=通道,ON/OFF/CLR"
+local USAGE_WL  = "鸽+WL?|鸽+WL=ON/OFF|鸽+WL=ADD,号码|鸽+WL=DEL,号码"
+local USAGE_FWD = "鸽+FWD?|鸽+FWD=SMS,ADD/DEL,号码|鸽+FWD=DING/FS,SET,webhook[,secret]|鸽+FWD=SC,SET,sendkey|鸽+FWD=通道,ON/OFF/CLR"
 
 --------------------------------------------------------------------------
 -- 校验工具
@@ -84,7 +84,7 @@ local function cmd_init(cfg, p, sender)
     cfg.whitelist = { n }
     sp_config.save()
     log.info("sp_commands", "固件初始化完成，白名单：", n)
-    return "OK:SmsPigeon 已初始化\n" .. n .. " 已加入白名单\n发送 AT+ST? 查看状态"
+    return "OK:SmsPigeon 已初始化\n" .. n .. " 已加入白名单\n发送 鸽+ST? 查看状态"
 end
 
 local function cmd_ver(cfg, p, sender)
@@ -158,7 +158,7 @@ local function cmd_wl(cfg, p, sender)
         if not num_valid(n) then return "ERROR:号码无效" end
         -- 防锁死：白名单开启时不允许删空（删空后无人能再控制本机）
         if cfg.wl_on and #cfg.whitelist == 1 and cfg.whitelist[1] == n then
-            return "ERROR:白名单开启时不可删空,请先发送 AT+WL=OFF"
+            return "ERROR:白名单开启时不可删空,请先发送 鸽+WL=OFF"
         end
         for i, w in ipairs(cfg.whitelist) do
             if w == n then
@@ -174,7 +174,7 @@ end
 
 local function cmd_pw(cfg, p, sender)
     if p.op ~= "write" or #p.args ~= 1 then
-        return "ERROR:用法 AT+PW=<新密码>(4-16位,不含逗号空格) 或 AT+PW= 清除密码"
+        return "ERROR:用法 鸽+PW=<新密码>(4-16位,不含逗号空格) 或 鸽+PW= 清除密码"
     end
     local pwd = p.args[1]
     if pwd == "" then
@@ -183,14 +183,15 @@ local function cmd_pw(cfg, p, sender)
         if not cfg.wl_on then
             return "OK:密码已清除\n警告:白名单已关闭且未设密码,任何人均可控制本机"
         end
-        return "OK:密码已清除,命令恢复 AT 前缀"
+        return "OK:密码已清除,命令恢复默认前缀 鸽+"
     end
     if #pwd < 4 or #pwd > 16 then return "ERROR:密码长度需为4-16位" end
     if pwd:find(",", 1, true) or pwd:find(" ", 1, true) then
         return "ERROR:密码不可包含逗号或空格"
     end
-    if pwd:upper() == "AT" then
-        return "ERROR:密码不可为AT"
+    if pwd:upper() == "AT" or pwd == "鸽" then
+        -- 密码即默认前缀等于把前缀公开，禁止
+        return "ERROR:密码不可为AT或鸽"
     end
     cfg.password = pwd
     sp_config.save()
@@ -309,13 +310,13 @@ local function cmd_fwd(cfg, p, sender)
 end
 
 local function cmd_reset(cfg, p, sender)
-    if p.op ~= "exec" then return "用法:AT+RESET(将清空全部配置并回到未初始化)" end
+    if p.op ~= "exec" then return "用法:鸽+RESET(将清空全部配置并回到未初始化)" end
     sp_config.factory_reset()
     return "OK:已恢复出厂设置,固件回到未初始化状态"
 end
 
 local function cmd_reboot(cfg, p, sender)
-    if p.op ~= "exec" then return "用法:AT+REBOOT" end
+    if p.op ~= "exec" then return "用法:鸽+REBOOT" end
     return "OK:3秒后重启", "reboot"
 end
 
@@ -324,15 +325,15 @@ end
 --------------------------------------------------------------------------
 
 local CMDS = {
-    { cmd = "",      usage = "AT",                    run = cmd_ping },
-    { cmd = "INIT",  usage = "AT+INIT=<本机IMEI>",    run = cmd_init },
-    { cmd = "VER",   usage = "AT+VER?",               run = cmd_ver },
-    { cmd = "ST",    usage = "AT+ST?",                run = cmd_st },
+    { cmd = "",      usage = "鸽",                    run = cmd_ping },
+    { cmd = "INIT",  usage = "鸽+INIT=<本机IMEI>",    run = cmd_init },
+    { cmd = "VER",   usage = "鸽+VER?",               run = cmd_ver },
+    { cmd = "ST",    usage = "鸽+ST?",                run = cmd_st },
     { cmd = "WL",    usage = USAGE_WL,                run = cmd_wl },
-    { cmd = "PW",    usage = "AT+PW=<新密码>|AT+PW=", run = cmd_pw },
+    { cmd = "PW",    usage = "鸽+PW=<新密码>|鸽+PW=", run = cmd_pw },
     { cmd = "FWD",   usage = USAGE_FWD,               run = cmd_fwd },
-    { cmd = "RESET", usage = "AT+RESET",              run = cmd_reset },
-    { cmd = "REBOOT",usage = "AT+REBOOT",             run = cmd_reboot },
+    { cmd = "RESET", usage = "鸽+RESET",              run = cmd_reset },
+    { cmd = "REBOOT",usage = "鸽+REBOOT",             run = cmd_reboot },
 }
 
 local CMD_MAP = {}
@@ -346,7 +347,7 @@ local function cmd_help(cfg, p, sender)
     return table.concat(lines, "\n")
 end
 
-CMD_MAP["HELP"] = { usage = "AT+HELP?", run = cmd_help }
+CMD_MAP["HELP"] = { usage = "鸽+HELP?", run = cmd_help }
 table.insert(CMDS, CMD_MAP["HELP"])
 
 --------------------------------------------------------------------------
@@ -384,7 +385,7 @@ function sp_commands.handle(sender, text)
 
     local entry = CMD_MAP[p.cmd]
     if not entry then
-        return true, "ERROR:未知命令,发送 AT+HELP? 查看命令列表", nil
+        return true, "ERROR:未知命令,发送 鸽+HELP? 查看命令列表", nil
     end
     if p.op == "test" then
         return true, "用法:" .. entry.usage, nil

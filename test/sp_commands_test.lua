@@ -39,18 +39,18 @@ end
 -- 未初始化状态
 --------------------------------------------------------------------------
 
-local is_cmd, reply = send(ME, "AT+ST?")
+local is_cmd, reply = send(ME, "鸽+ST?")
 eq(is_cmd, true, "未初始化时ST是命令(不转发)")
 eq(reply, nil, "未初始化时非INIT命令静默丢弃")
 
 is_cmd, reply = send(ME, "hello world")
 eq(is_cmd, false, "普通短信标记为非命令")
 
-is_cmd, reply = send(ME, "AT+INIT=000000000000000")
+is_cmd, reply = send(ME, "鸽+INIT=000000000000000")
 eq(is_cmd, true, "INIT是命令")
 eq(reply, "ERROR", "IMEI错误回笼统ERROR")
 
-is_cmd, reply = send(ME, "AT+INIT=860123456789012")
+is_cmd, reply = send(ME, "鸽+INIT=860123456789012")
 eq(is_cmd, true, "INIT是命令")
 contains(reply, "已初始化", "正确IMEI初始化成功")
 contains(reply, ME, "发送者加入白名单")
@@ -60,91 +60,91 @@ eq(cfg.initialized, true, "初始化状态已写入配置")
 eq(cfg.whitelist[1], "13800138000", "白名单首个成员为归一化机主号码")
 
 -- 已初始化后再次 INIT 被拒绝
-is_cmd, reply = send(ME, "AT+INIT=860123456789012")
+is_cmd, reply = send(ME, "鸽+INIT=860123456789012")
 eq(reply, "ERROR", "已初始化固件不可再次初始化")
 
 --------------------------------------------------------------------------
 -- 初始化后：门禁
 --------------------------------------------------------------------------
 
-is_cmd, reply = send(ME, "AT")
-eq(is_cmd, true, "AT是命令")
-contains(reply, "OK", "AT探测回复OK")
+is_cmd, reply = send(ME, "鸽")
+eq(is_cmd, true, "鸽是命令")
+contains(reply, "OK", "鸽探测回复OK")
 
-is_cmd, reply = send(OTHER, "AT+ST?")
+is_cmd, reply = send(OTHER, "鸽+ST?")
 eq(is_cmd, true, "陌生人命令被识别")
 eq(reply, nil, "陌生人命令静默拒绝")
 
-is_cmd, reply = send(ME, "AT+XYZ?")
+is_cmd, reply = send(ME, "鸽+XYZ?")
 eq(is_cmd, true, "未知命令")
 contains(reply, "未知命令", "未知命令有错误应答")
 
-is_cmd, reply = send(ME, "AT+HELP?")
-contains(reply, "AT+INIT", "HELP包含INIT用法")
-contains(reply, "AT+RESET", "HELP包含RESET用法")
+is_cmd, reply = send(ME, "鸽+HELP?")
+contains(reply, "鸽+INIT", "HELP包含INIT用法")
+contains(reply, "鸽+RESET", "HELP包含RESET用法")
 
-is_cmd, reply = send(ME, "AT+VER?")
+is_cmd, reply = send(ME, "鸽+VER?")
 contains(reply, "1.0.0", "VER包含版本号")
 
-is_cmd, reply = send(ME, "AT+ST?")
+is_cmd, reply = send(ME, "鸽+ST?")
 contains(reply, "IMEI:860123456789012", "ST包含IMEI")
 contains(reply, "白名单:开", "ST包含白名单状态")
 contains(reply, "密码:未设置", "ST包含密码状态")
 
-is_cmd, reply = send(ME, "AT+WL=?")
+is_cmd, reply = send(ME, "鸽+WL=?")
 contains(reply, "用法:", "test操作返回用法")
 
 --------------------------------------------------------------------------
 -- 白名单管理
 --------------------------------------------------------------------------
 
-is_cmd, reply = send(ME, "AT+WL=ADD,+8613711112222")
+is_cmd, reply = send(ME, "鸽+WL=ADD,+8613711112222")
 contains(reply, "OK", "白名单添加(+86形式)")
 eq(sp_config.get().whitelist[#sp_config.get().whitelist], "13711112222", "白名单存储归一化号码")
 
-is_cmd, reply = send(ME, "AT+WL=ADD,13711112222")
+is_cmd, reply = send(ME, "鸽+WL=ADD,13711112222")
 contains(reply, "ERROR", "重复添加报错")
 
-is_cmd, reply = send(ME, "AT+WL=ADD,abc")
+is_cmd, reply = send(ME, "鸽+WL=ADD,abc")
 contains(reply, "ERROR", "非法号码报错")
 
 -- 13711112222 现在在白名单内，可以发命令
-is_cmd, reply = send("+8613711112222", "AT")
+is_cmd, reply = send("+8613711112222", "鸽")
 contains(reply, "OK", "+86形式发送者命中白名单")
 
-is_cmd, reply = send(ME, "AT+WL?")
+is_cmd, reply = send(ME, "鸽+WL?")
 contains(reply, "13800138000", "WL查询列出成员")
 contains(reply, "13711112222", "WL查询列出第二个成员")
 
 -- 防锁死：白名单开启时删除唯一条目被拒绝
-is_cmd, reply = send(ME, "AT+WL=DEL,13711112222")
+is_cmd, reply = send(ME, "鸽+WL=DEL,13711112222")
 contains(reply, "OK", "删除非末位成员正常")
-is_cmd, reply = send(ME, "AT+WL=DEL,13800138000")
+is_cmd, reply = send(ME, "鸽+WL=DEL,13800138000")
 contains(reply, "不可删空", "白名单开启时删空被拒绝")
 eq(#sp_config.get().whitelist, 1, "被拒绝的删除不生效")
 
-is_cmd, reply = send(ME, "AT+WL=OFF")
+is_cmd, reply = send(ME, "鸽+WL=OFF")
 contains(reply, "警告", "关白名单且无密码时警告")
 
 -- 白名单关闭后，陌生人也可控制（危险状态，文档已警示）
-is_cmd, reply = send(OTHER, "AT")
+is_cmd, reply = send(OTHER, "鸽")
 contains(reply, "OK", "白名单关闭后陌生人可探测")
 
-is_cmd, reply = send(ME, "AT+WL=ON")
+is_cmd, reply = send(ME, "鸽+WL=ON")
 contains(reply, "OK", "重新开启白名单")
-is_cmd, reply = send(OTHER, "AT")
+is_cmd, reply = send(OTHER, "鸽")
 eq(reply, nil, "白名单重新生效")
 
 --------------------------------------------------------------------------
 -- 密码管理
 --------------------------------------------------------------------------
 
-is_cmd, reply = send(ME, "AT+PW=8888")
+is_cmd, reply = send(ME, "鸽+PW=8888")
 contains(reply, "OK", "设置密码")
 eq(sp_config.get().password, "8888", "密码已保存")
 
-is_cmd, reply = send(ME, "AT+ST?")
-eq(is_cmd, false, "密码模式下AT前缀失效,原短信走转发")
+is_cmd, reply = send(ME, "鸽+ST?")
+eq(is_cmd, false, "密码模式下默认前缀失效,原短信走转发")
 
 is_cmd, reply = send(ME, "8888+ST?")
 eq(is_cmd, true, "密码前缀识别为命令")
@@ -163,27 +163,27 @@ is_cmd, reply = send(ME, "6666+PW=")
 contains(reply, "OK", "清空密码")
 eq(sp_config.get().password, "", "密码已清空")
 
-is_cmd, reply = send(ME, "AT+PW=abc")
+is_cmd, reply = send(ME, "鸽+PW=abc")
 contains(reply, "ERROR", "密码过短报错")
-is_cmd, reply = send(ME, "AT+PW=1234,5678")
+is_cmd, reply = send(ME, "鸽+PW=1234,5678")
 contains(reply, "ERROR", "多参数按用法错误处理")
-is_cmd, reply = send(ME, "AT+PW=AT")
+is_cmd, reply = send(ME, "鸽+PW=AT")
 contains(reply, "ERROR", "密码不可为AT")
 
 --------------------------------------------------------------------------
 -- 转发通道配置
 --------------------------------------------------------------------------
 
-is_cmd, reply = send(ME, "AT+FWD=SMS,ADD,13711112222")
+is_cmd, reply = send(ME, "鸽+FWD=SMS,ADD,13711112222")
 contains(reply, "OK", "添加短信转发目标")
 
-is_cmd, reply = send(ME, "AT+FWD=SMS,ADD,13711112222")
+is_cmd, reply = send(ME, "鸽+FWD=SMS,ADD,13711112222")
 contains(reply, "ERROR", "重复添加转发目标报错")
 
-is_cmd, reply = send(ME, "AT+FWD=SMS,ON")
+is_cmd, reply = send(ME, "鸽+FWD=SMS,ON")
 contains(reply, "OK", "开启短信通道")
 
-is_cmd, reply = send(ME, "AT+FWD=DING,SET,https://oapi.dingtalk.com/robot/send?access_token=abc,SECxxx")
+is_cmd, reply = send(ME, "鸽+FWD=DING,SET,https://oapi.dingtalk.com/robot/send?access_token=abc,SECxxx")
 
 contains(reply, "OK", "配置钉钉(带加签)")
 local ding = sp_config.get().fwd.dingtalk
@@ -191,27 +191,27 @@ eq(ding.url, "https://oapi.dingtalk.com/robot/send?access_token=abc", "钉钉URL
 eq(ding.secret, "SECxxx", "钉钉密钥保存")
 eq(ding.on, true, "SET后自动开启")
 
-is_cmd, reply = send(ME, "AT+FWD=DING,SET,ftp://bad")
+is_cmd, reply = send(ME, "鸽+FWD=DING,SET,ftp://bad")
 contains(reply, "ERROR", "非法URL报错")
 
-is_cmd, reply = send(ME, "AT+FWD=SC,SET,SCT1234ABCD")
+is_cmd, reply = send(ME, "鸽+FWD=SC,SET,SCT1234ABCD")
 contains(reply, "OK", "配置Server酱SendKey")
 eq(sp_config.get().fwd.serverchan.sendkey, "SCT1234ABCD", "SendKey保存")
 
-is_cmd, reply = send(ME, "AT+FWD=SC,SET,https://sc3.example.com/send/xxx.send")
+is_cmd, reply = send(ME, "鸽+FWD=SC,SET,https://sc3.example.com/send/xxx.send")
 contains(reply, "OK", "Server酱支持完整URL")
 
-is_cmd, reply = send(ME, "AT+FWD=FS,SET,https://open.feishu.cn/open-apis/bot/v2/hook/xxx")
+is_cmd, reply = send(ME, "鸽+FWD=FS,SET,https://open.feishu.cn/open-apis/bot/v2/hook/xxx")
 contains(reply, "OK", "配置飞书(免签)")
 
-is_cmd, reply = send(ME, "AT+FWD=XXX,ON")
+is_cmd, reply = send(ME, "鸽+FWD=XXX,ON")
 contains(reply, "ERROR", "未知通道报错")
 
-is_cmd, reply = send(ME, "AT+FWD=DING,CLR")
+is_cmd, reply = send(ME, "鸽+FWD=DING,CLR")
 contains(reply, "OK", "清空钉钉配置")
 eq(sp_config.get().fwd.dingtalk.on, false, "清空后通道关闭")
 
-is_cmd, reply = send(ME, "AT+FWD?")
+is_cmd, reply = send(ME, "鸽+FWD?")
 contains(reply, "短信:开", "FWD查询包含短信通道状态")
 
 --------------------------------------------------------------------------
@@ -219,9 +219,9 @@ contains(reply, "短信:开", "FWD查询包含短信通道状态")
 --------------------------------------------------------------------------
 
 -- 清场：本测试只验证短信通道端到端（HTTP 通道无桩）
-is_cmd, reply = send(ME, "AT+FWD=FS,CLR")
+is_cmd, reply = send(ME, "鸽+FWD=FS,CLR")
 contains(reply, "OK", "清空飞书配置")
-is_cmd, reply = send(ME, "AT+FWD=SC,CLR")
+is_cmd, reply = send(ME, "鸽+FWD=SC,CLR")
 contains(reply, "OK", "清空Server酱配置")
 
 local sent_before = #MOCKS.sent
@@ -239,16 +239,16 @@ contains(out.text, "SmsPigeon", "转发文本带前缀标记")
 --------------------------------------------------------------------------
 
 local action
-is_cmd, reply, action = send(ME, "AT+REBOOT")
+is_cmd, reply, action = send(ME, "鸽+REBOOT")
 contains(reply, "OK", "重启命令应答")
 eq(action, "reboot", "重启命令返回action")
 
-is_cmd, reply = send(ME, "AT+RESET")
+is_cmd, reply = send(ME, "鸽+RESET")
 contains(reply, "OK", "恢复出厂应答")
 eq(sp_config.get().initialized, false, "复位后回到未初始化")
 
 -- 复位后回到未初始化门禁
-is_cmd, reply = send(ME, "AT")
+is_cmd, reply = send(ME, "鸽")
 eq(reply, nil, "复位后普通命令静默丢弃")
 
 print(string.format("PASS sp_commands_test (%d assertions)", n))
