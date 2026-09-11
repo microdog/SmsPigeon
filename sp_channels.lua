@@ -108,10 +108,11 @@ function sp_channels.form_encode(params)
     return table.concat(parts, "&")
 end
 
--- 网络类通道统一的转发文本
+-- 网络类通道统一的转发文本。msg.prefix 为用户自定义前缀（默认空串），
+-- 不再内置任何固定标识，避免出栈短信携带可被运营商过滤的特征
 function sp_channels.format_text(msg)
-    return string.format("【SmsPigeon】收到来自 %s 的短信\n时间: %s\n\n%s",
-        msg.sender, msg.time, msg.text)
+    return string.format("%s收到来自 %s 的短信\n时间: %s\n\n%s",
+        msg.prefix or "", msg.sender, msg.time, msg.text)
 end
 
 return sp_channels

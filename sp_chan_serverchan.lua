@@ -41,7 +41,8 @@ function ch.send(msg, chcfg)
     local url = key:sub(1, 4):lower() == "http" and key or (BASE_URL .. key .. ".send")
 
     local ok, resp = sp_channels.http_post_form(url, {
-        title = string.format("SmsPigeon: 来自 %s 的短信", msg.sender),
+        -- title 同样使用用户自定义前缀，默认无固定标识
+        title = string.format("%s来自 %s 的短信", msg.prefix or "", msg.sender),
         desp = sp_channels.format_text(msg),
     })
     if not ok then return false, resp end

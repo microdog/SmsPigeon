@@ -18,6 +18,7 @@ local cfg = sp_config.get()
 eq(cfg.initialized, false, "默认未初始化")
 eq(cfg.wl_on, true, "默认白名单开启")
 eq(cfg.password, "", "默认无密码")
+eq(cfg.prefix, "", "默认无转发前缀")
 eq(#cfg.whitelist, 0, "默认白名单为空")
 eq(cfg.fwd.sms.on, false, "默认短信通道关闭")
 eq(cfg.fwd.dingtalk.url, "", "默认钉钉未配置")
@@ -28,6 +29,7 @@ eq(cfg.nosim_cnt, 0, "默认无卡计数为0")
 cfg.initialized = true
 cfg.wl_on = false
 cfg.password = "1234"
+cfg.prefix = "【短信鸽】"
 table.insert(cfg.whitelist, "13800138000")
 cfg.fwd.sms.on = true
 table.insert(cfg.fwd.sms.targets, "13900139000")
@@ -43,6 +45,7 @@ local cfg2 = sp_config2.get()
 eq(cfg2.initialized, true, "重启后初始化状态保持")
 eq(cfg2.wl_on, false, "重启后白名单开关保持")
 eq(cfg2.password, "1234", "重启后密码保持")
+eq(cfg2.prefix, "【短信鸽】", "重启后转发前缀保持")
 eq(cfg2.whitelist[1], "13800138000", "重启后白名单保持")
 eq(cfg2.fwd.sms.on, true, "重启后短信通道开关保持")
 eq(cfg2.fwd.sms.targets[1], "13900139000", "重启后转发目标保持")

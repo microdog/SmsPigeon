@@ -15,6 +15,7 @@
   信鸽，开启白名单 / 关闭白名单
   信鸽，增加白名单，<号码> / 删除白名单，<号码>
   信鸽，设置密码，<密码> / 清除密码
+  信鸽，设置前缀，<前缀文本> / 清除前缀   转发消息自定义前缀（默认空）
   信鸽，转发                  查看转发通道
   信鸽，增加转发号码，<号码> / 删除转发号码，<号码>
   信鸽，开启<通道> / 关闭<通道> / 清空<通道>（通道：短信/钉钉/飞书/Server酱/企业微信）
@@ -110,6 +111,7 @@ local function cmd_st(cfg, args, sender)
         "信号:" .. tostring(sp_platform.csq()),
         "白名单:" .. (cfg.wl_on and "开" or "关") .. string.format("(%d个)", #cfg.whitelist),
         "密码:" .. (cfg.password ~= "" and "已设置" or "未设置"),
+        "前缀:" .. (cfg.prefix ~= "" and cfg.prefix or "无"),
         "通道:",
     }
     for _, key in ipairs(sp_channels.keys()) do
@@ -222,6 +224,39 @@ local function cmd_pw_clr(cfg, args, sender)
         return "OK:密码已清除\n警告:白名单已关闭且未设密码,任何人均可控制本机"
     end
     return "OK:密码已清除,命令恢复默认前缀 信鸽"
+end
+
+--------------------------------------------------------------------------
+-- 转发前缀（默认空：转发消息不携带任何固定标识，防运营商特征过滤）
+--------------------------------------------------------------------------
+
+local function cmd_prefix_read(cfg, args, sender)
+    return "OK:当前转发前缀:" .. (cfg.prefix ~= "" and cfg.prefix or "(无)")
+end
+
+local function cmd_prefix_set(cfg, args, sender)
+    -- 前缀中的逗号按原样保留：参数拆分后用中文逗号拼回
+    local pfx = table.concat(args, "，")
+    if pfx == "" then
+        return "ERROR:用法 信鸽，设置前缀，<前缀文本>"
+    end
+    local len = (utf8 and utf8.len(pfx)) or #pfx
+    if not len or len > sp_config.MAX_PREFIX then
+        return "ERROR:前缀过长(上限" .. sp_config.MAX_PREFIX .. "个字符)"
+    end
+    if pfx:sub(1, 6) == "信鸽" or pfx:sub(1, 3) == "鸽" then
+        -- 前缀若为命令形式，转发出的短信会被误判为命令
+        return "ERROR:前缀不可为信鸽等命令形式"
+    end
+    cfg.prefix = pfx
+    sp_config.save()
+    return "OK:转发前缀已设置:" .. pfx
+end
+
+local function cmd_prefix_clr(cfg, args, sender)
+    cfg.prefix = ""
+    sp_config.save()
+    return "OK:转发前缀已清除"
 end
 
 --------------------------------------------------------------------------
@@ -420,6 +455,9 @@ CMDS = {
     { cmd = "WL_DEL",     usage = "信鸽，删除白名单，<号码>",   run = cmd_wl_del },
     { cmd = "PW_SET",     usage = "信鸽，设置密码，<密码>",     run = cmd_pw_set },
     { cmd = "PW_CLR",     usage = "信鸽，清除密码",             run = cmd_pw_clr },
+    { cmd = "PREFIX_READ", usage = "信鸽，前缀",                 run = cmd_prefix_read },
+    { cmd = "PREFIX_SET",  usage = "信鸽，设置前缀，<前缀文本>", run = cmd_prefix_set },
+    { cmd = "PREFIX_CLR",  usage = "信鸽，清除前缀",             run = cmd_prefix_clr },
     { cmd = "FWD_READ",   usage = "信鸽，转发",                 run = cmd_fwd_read },
     { cmd = "FWD_SMS_ADD", usage = "信鸽，增加转发号码，<号码>", run = cmd_fwd_sms_add },
     { cmd = "FWD_SMS_DEL", usage = "信鸽，删除转发号码，<号码>", run = cmd_fwd_sms_del },

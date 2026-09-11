@@ -1,7 +1,7 @@
 --[[
 @module  sp_config
 @summary SmsPigeon 配置持久化模块（基于 fskv 键值存储）
-@version 1.0
+@version 1.1
 @date    2026.09.11
 @usage
 本模块负责所有用户配置的读写、默认值合并与恢复出厂设置。
@@ -22,11 +22,12 @@ local KEY_STATE = "sp_state"   -- "INIT" 表示固件已初始化，其他/不�
 local KEY_WL_ON = "sp_wl_on"   -- 白名单开关
 local KEY_WL    = "sp_wl"      -- 白名单号码列表(table)
 local KEY_PW    = "sp_pw"      -- 短信命令密码，"" 表示密码模式关闭
+local KEY_PFX   = "sp_pfx"     -- 转发消息前缀，"" 表示不带前缀
 local KEY_FWD   = "sp_fwd"     -- 各转发通道配置(table)
 local KEY_ICCID = "sp_iccid"   -- 最近一次绑定的 SIM 卡 ICCID(复位判定用)
 local KEY_NOSIM = "sp_nosim"   -- 连续无卡开机计数
 
-local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_FWD, KEY_ICCID, KEY_NOSIM }
+local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_FWD, KEY_ICCID, KEY_NOSIM }
 
 -- 配置缓存（由 init() 填充）
 local cache = nil
@@ -34,11 +35,15 @@ local cache = nil
 -- 白名单/转发目标列表的容量上限，防止 fskv 空间被撑爆
 sp_config.MAX_LIST = 10
 
+-- 转发前缀的长度上限（字符数，中文算 1 个）
+sp_config.MAX_PREFIX = 30
+
 --[[
 返回一份全新默认配置：
 - 固件默认未初始化；
 - 白名单默认开启且为空（初始化命令会把发起号码写入白名单）；
 - 密码默认关闭；
+- 转发消息默认不带前缀（避免固定标识特征被运营商过滤）；
 - 所有转发通道默认关闭且未配置。
 ]]
 function sp_config.defaults()
@@ -47,6 +52,7 @@ function sp_config.defaults()
         wl_on = true,
         whitelist = {},                                   -- { "13800138000", ... }，存储归一化后的号码
         password = "",
+        prefix = "",                                      -- 转发消息前缀（含【】等由用户自定）
         fwd = {
             sms        = { on = false, targets = {} },    -- 短信转发目标列表
             dingtalk   = { on = false, url = "", secret = "" },
@@ -80,6 +86,9 @@ local function load_cfg()
 
     v = fskv.get(KEY_PW)
     if type(v) == "string" then cfg.password = v end
+
+    v = fskv.get(KEY_PFX)
+    if type(v) == "string" then cfg.prefix = v end
 
     v = fskv.get(KEY_FWD)
     if type(v) == "table" then
@@ -123,6 +132,7 @@ function sp_config.save()
     fskv.set(KEY_WL_ON, c.wl_on)
     fskv.set(KEY_WL, c.whitelist)
     fskv.set(KEY_PW, c.password)
+    fskv.set(KEY_PFX, c.prefix)
     fskv.set(KEY_FWD, c.fwd)
 end
 

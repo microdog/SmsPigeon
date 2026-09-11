@@ -126,6 +126,11 @@ local PHRASES = {
     { "删除白名单",   "WL_DEL" },
     { "移除白名单",   "WL_DEL" },
     { "白名单",       "WL_READ" },
+    -- 转发前缀
+    { "设置前缀",     "PREFIX_SET" },
+    { "清除前缀",     "PREFIX_CLR" },
+    { "清空前缀",     "PREFIX_CLR" },
+    { "前缀",         "PREFIX_READ" },
     -- 密码
     { "设置密码",     "PW_SET" },
     { "清除密码",     "PW_CLR" },

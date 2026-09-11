@@ -281,15 +281,45 @@ contains(reply, "短信:开", "转发查询包含短信通道状态")
 -- 转发分发集成（短信通道端到端）
 --------------------------------------------------------------------------
 
+-- 前缀命令流
+is_cmd, reply = send(ME, "信鸽，前缀")
+contains(reply, "(无)", "默认无转发前缀")
+is_cmd, reply = send(ME, "信鸽，设置前缀，【短信鸽】")
+contains(reply, "OK", "设置转发前缀")
+eq(sp_config.get().prefix, "【短信鸽】", "前缀已保存")
+is_cmd, reply = send(ME, "信鸽，前缀")
+contains(reply, "【短信鸽】", "查询当前前缀")
+is_cmd, reply = send(ME, "信鸽，设置前缀，信鸽转发")
+contains(reply, "ERROR", "前缀不可为命令形式")
+is_cmd, reply = send(ME, "信鸽，状态")
+contains(reply, "前缀:【短信鸽】", "状态显示前缀")
+
+-- 前缀含逗号：参数拆分后用中文逗号拼回
+is_cmd, reply = send(ME, "信鸽，设置前缀，【短信，备份】")
+eq(sp_config.get().prefix, "【短信，备份】", "前缀中的逗号按原样保留")
+is_cmd, reply = send(ME, "信鸽，清除前缀")
+contains(reply, "OK", "清除转发前缀")
+eq(sp_config.get().prefix, "", "前缀已清空")
+
 local sent_before = #MOCKS.sent
-sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-11 10:00:00" },
-    sp_config.get().fwd)
+local cfg = sp_config.get()
+sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-11 10:00:00",
+    prefix = cfg.prefix or "" }, cfg.fwd)
 eq(#MOCKS.sent - sent_before, 1, "分发触发1条短信转发")
 local out = MOCKS.sent[#MOCKS.sent]
 eq(out.num, "13262575718", "转发到配置的目标")
 contains(out.text, "10086", "转发文本包含来信号码")
 contains(out.text, "余额:10元", "转发文本包含原文")
-contains(out.text, "SmsPigeon", "转发文本带前缀标记")
+assert(not out.text:find("SmsPigeon", 1, true), "默认转发文本不带固定标识")
+n = n + 1
+
+-- 设置前缀后再分发：转发文本携带自定义前缀
+send(ME, "信鸽，设置前缀，【短信鸽】")
+sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-11 10:00:00",
+    prefix = sp_config.get().prefix }, sp_config.get().fwd)
+local out2 = MOCKS.sent[#MOCKS.sent]
+contains(out2.text, "【短信鸽】", "转发文本携带自定义前缀")
+send(ME, "信鸽，清除前缀")
 
 --------------------------------------------------------------------------
 -- 重启与恢复出厂
