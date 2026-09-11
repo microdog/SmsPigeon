@@ -149,8 +149,12 @@ local function cmd_wl_read(cfg, args, sender)
     return "OK:白名单(" .. (cfg.wl_on and "开" or "关") .. ")\n"
         .. (#lines > 0 and table.concat(lines, "\n") or "(空)")
 end
-
 local function cmd_wl_on(cfg, args, sender)
+    -- 空白名单 + 开启 = AND 语义下无人能再控制设备（密码也救不回），
+    -- 只能拔卡三次或重烧——拒绝开启，提示先补号码
+    if #cfg.whitelist == 0 then
+        return "ERROR:白名单为空,请先发送 信鸽，增加白名单，<号码>"
+    end
     cfg.wl_on = true
     sp_config.save()
     return "OK:白名单已开启"
