@@ -10,10 +10,10 @@
 |---|---|---|
 | `main.lua` | 入口：PROJECT/VERSION 与模块装配顺序（顺序有依赖，勿乱动） | `PROJECT` `VERSION` `sys.run` |
 | `sp_config.lua` | 配置缓存、fskv 读写、默认值合并、恢复出厂 | `get` `save` `save_iccid` `save_nosim` `factory_reset` `MAX_LIST` |
-| `sp_at.lua` | AT 风格命令解析、鸽+前缀、全角归一（纯逻辑，无硬件依赖） | `parse(text, password)` `trim` |
+| `sp_at.lua` | 中文句子命令解析：信鸽前缀、短语最长匹配、全角/顿号句号归一、中文数字（纯逻辑） | `parse(text, password)` `digits` `cn_digits` `trim` |
 | `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块） | `imei` `iccid` `registered` `csq` `model` `reboot` `LED_GPIO` `LED_ACTIVE_HIGH` |
 | `sp_led.lua` | 状态灯（开发板 NET 灯）：网络/初始化指示与短信到达三连闪 | `pattern_for` `blink` |
-| `sp_commands.lua` | 命令表、执行、应答文案、未初始化/授权门禁 | `handle(sender, text)` `CH_ALIAS` `CMDS` |
+| `sp_commands.lua` | 命令表（中文命令标识）、执行、应答文案、未初始化/授权门禁 | `handle(sender, text)` `CH_ALIAS` `CMDS` |
 | `sp_forward.lua` | 短信唯一入口：命令分流/转发分发/应答发送 | `on_sms`（内部）`sms.setNewSmsCb` 注册 |
 | `sp_channels.lua` | 通道注册表 + HTTP/表单/联网等待工具 | `register` `dispatch` `keys` `wait_net` `http_post_json` `format_text` |
 | `sp_chan_sms.lua` | 短信转发通道（离线可用，注册序第一） | `ch.send` `ch.is_configured` |
@@ -29,7 +29,7 @@
 |---|---|
 | `test/mocks.lua` | LuatOS 全局 API 内存桩（fskv 深拷贝语义、mobile 可变桩） |
 | `test/run_tests.lua` | 运行器：每文件独立桩+模块缓存；`test/run_with_lupa.py` 为 Windows 入口 |
-| `test/sp_at_test.lua` | 解析器：鸽+/密码前缀、边界与非法输入、AT 前缀移除断言 |
+| `test/sp_at_test.lua` | 解析器：信鸽前缀、短语/参数、密码模式、中文数字、UTF-8 字节类地雷回归 |
 | `test/sp_auth_test.lua` | 归一化、白名单、门禁组合 |
 | `test/sp_config_test.lua` | 默认值、持久化往返、损坏数据容错、恢复出厂 |
 | `test/sp_commands_test.lua` | 初始化/门禁/白名单/密码/通道命令全流程、AND 语义、防锁死 |

@@ -1,43 +1,62 @@
 --[[
 @module  sp_at
-@summary SmsPigeon AT 风格短信命令解析器（纯逻辑，零硬件依赖）
-@version 1.1
+@summary SmsPigeon 中文句子命令解析器（纯逻辑，零硬件依赖）
+@version 2.0
 @date    2026.09.11
 @usage
-把一条短信文本解析为结构化命令。语法保留 AT 命令风格（?/=），但前缀为中文
-"鸽"——运营商/物联网卡平台可能过滤 "AT" 开头的机器特征短信，中文前缀可规避：
+把短信文本解析为结构化中文命令。前缀为"信鸽"，命令体为自然中文短语：
 
-    鸽+CMD?          查询（read）
-    鸽+CMD=A,B,C     设置（write，参数按英文逗号分隔）
-    鸽+CMD           执行（exec）
-    鸽+CMD=?         测试，返回用法说明（test）
-    鸽               单独出现视为链路探测命令（cmd 为空串）
+    信鸽                      链路探测
+    信鸽，状态？              查询状态总览
+    信鸽，初始化，<IMEI>      初始化（唯一免鉴权命令）
+    信鸽，增加白名单，<号码>   白名单管理（号码支持中文数字）
 
-注意：AT 前缀已完全移除，"AT+X" 一律按普通短信处理（会被转发）。
-
-密码模式：设置了密码后，命令的 "鸽" 前缀替换为密码，例如密码为 8888 时：
-    8888+ST?
-密码模式下不再接受默认前缀（避免密码保护被绕过），密码本身也不可设为
-"AT" 或 "鸽"（sp_commands 层校验），否则等于把前缀公开。
+背景：运营商/物联网卡平台会过滤机器特征短信（曾实测 鸽+FWD=SMS,ADD,号码
+被拦而全中文句子可达），因此命令整体使用中文句子格式。
 
 解析规则：
-- 命令名大小写不敏感，统一转为大写；参数保持原样（URL/密码区分大小写）；
-- 前后空白（含换行/全角空格）会被剔除；
-- 前缀后必须紧跟 "+"：因此"鸽子汤多少钱"这类正常短信不会被误判为命令；
-- 解析失败返回 nil，调用方将其视为普通短信（走转发流程）。
+- 前缀"信鸽"后须为空或跟分隔符——"信鸽子汤"这类正常短信不会误判；
+- 命令短语按"最长匹配"识别，具体短语后须为空或跟分隔符/句读，
+  通用动词（开启/关闭/清空）后可直接拼接通道名（开启钉钉）；
+- 参数以逗号分隔；冒号/空格保留在参数内（URL 的 "://"、
+  分组号码 132-6257-5718 均不受影响）；
+- 全角符号/数字/字母自动转半角，顿号句号归一为逗号，句尾 ？；！不算内容；
+- 中文数字自动转阿拉伯数字（sp_at.digits）：一三二六→1326，支持幺/两/〇；
+- 解析失败返回 nil（非命令，走转发流程）；前缀命中但短语未识别返回
+  cmd=nil（按未知命令处理，不转发）。
+
+密码模式：设置密码后，"信鸽"前缀替换为密码（密码支持中文），密码后须为空
+或跟分隔符，如密码 8888 时发送 8888，状态。
+
+实现注意（Lua UTF-8 地雷）：多字节字符严禁放入 [] 字符类——字符类是
+字节集合，会误吃包含相同字节的汉字（"态"的 80/81 字节曾被 [、。] 吃掉）。
+全角转半角用"EF BC + 单字节"序列模式，顿号句号用完整字面量，
+中文数字用"一个 UTF-8 字符"通用模式逐字查表。
 
 本模块不接触任何硬件/系统 API，可在纯 Lua 环境下单元测试。
 ]]
 
 local sp_at = {}
 
--- 默认命令前缀（UTF-8 多字节，#取得字节数，sub 按字节切分同样正确）
-local PREFIX = "鸽"
+-- 命令唤醒前缀
+local PREFIX = "信鸽"
+
+-- 分隔符：逗号(含归一后的、。)、冒号、空白、句读（？；！归一后为半角）
+local SEP = "[,:%s;!?]"
+
+-- 中文数字 → 阿拉伯数字（电话号码读法：逐位转换）
+local CN_DIGIT = {
+    ["零"] = "0", ["〇"] = "0",
+    ["一"] = "1", ["幺"] = "1",
+    ["二"] = "2", ["两"] = "2",
+    ["三"] = "3", ["四"] = "4", ["五"] = "5",
+    ["六"] = "6", ["七"] = "7", ["八"] = "8", ["九"] = "9",
+}
 
 --[[
 全角 ASCII（！～，U+FF01-FF5E）转半角。
-中文输入法在"鸽"前缀场景下常敲出全角符号（？＝＋，）与全角数字/字母，
-统一归一后再解析。UTF-8 编码：U+FF01-FF5E = EF BC 81-DE，映射为原码减 0x60。
+中文输入法常敲出全角符号（？＝＋，）与全角数字/字母，统一归一后再解析。
+UTF-8 编码：U+FF01-FF5E = EF BC 81-DE，映射为原码减 0x60。
 ]]
 local function to_halfwidth(s)
     return (s:gsub("\239\188([\129-\222])", function(c)
@@ -45,35 +64,141 @@ local function to_halfwidth(s)
     end))
 end
 
--- 去除首尾空白字符（空格/制表符/回车/换行/全角空格）
+-- 文本归一：全角转半角 + 顿号/句号归一为逗号 + 首尾空白剔除
+local function normalize(s)
+    s = to_halfwidth(s)
+    s = s:gsub("、", ","):gsub("。", ",")
+    return sp_at.trim(s)
+end
+
+--[[
+中文数字转阿拉伯数字（逐字符）。
+不能用 [] 收集多字节字符（字节集合地雷）：用"一个 UTF-8 字符"的
+通用模式逐字查表，表外字符（nil）由 gsub 语义原样保留。
+]]
+function sp_at.cn_digits(s)
+    return (s:gsub("[%z\1-\127\194-\244][\128-\191]*", CN_DIGIT))
+end
+
+--[[
+提取数字串：中文数字转阿拉伯后剔除全部非数字。
+号码可用横线/空格分组，可用中文数字书写，均可得到纯数字。
+]]
+function sp_at.digits(s)
+    return sp_at.cn_digits(tostring(s)):gsub("%D", "")
+end
+
+-- 去除首尾空白字符：ASCII 空白用字符类，全角空格(U+3000)用完整字面量
 function sp_at.trim(s)
-    return (s:gsub("^[ \t\r\n　]+", ""):gsub("[ \t\r\n　]+$", ""))
+    s = s:gsub("^[ \t\r\n]+", ""):gsub("[ \t\r\n]+$", "")
+    s = s:gsub("^　+", ""):gsub("　+$", "")
+    return s
+end
+
+--[[
+命令短语表：{ 短语, 命令标识, free }。
+- 匹配按短语长度降序尝试（最长优先），"开启白名单" 先于通用动词 "开启"；
+- free=true（通用动词）不要求短语后有分隔符，通道名可直接拼接；
+- cmd 标识由 sp_commands 消费。
+]]
+local PHRASES = {
+    -- 状态与信息
+    { "帮助",         "HELP" },
+    { "命令列表",     "HELP" },
+    { "查看状态",     "ST" },
+    { "查询状态",     "ST" },
+    { "状态",         "ST" },
+    { "版本",         "VER" },
+    -- 初始化与复位
+    { "初始化设备",   "INIT" },
+    { "初始化",       "INIT" },
+    { "恢复出厂设置", "RESET" },
+    { "恢复出厂",     "RESET" },
+    { "恢复默认",     "RESET" },
+    { "重启模块",     "REBOOT" },
+    { "重启",         "REBOOT" },
+    -- 白名单
+    { "查看白名单",   "WL_READ" },
+    { "开启白名单",   "WL_ON" },
+    { "关闭白名单",   "WL_OFF" },
+    { "增加白名单",   "WL_ADD" },
+    { "添加白名单",   "WL_ADD" },
+    { "删除白名单",   "WL_DEL" },
+    { "移除白名单",   "WL_DEL" },
+    { "白名单",       "WL_READ" },
+    -- 密码
+    { "设置密码",     "PW_SET" },
+    { "清除密码",     "PW_CLR" },
+    { "清空密码",     "PW_CLR" },
+    -- 短信转发目标
+    { "增加短信转发号码", "FWD_SMS_ADD" },
+    { "添加短信转发号码", "FWD_SMS_ADD" },
+    { "删除短信转发号码", "FWD_SMS_DEL" },
+    { "移除短信转发号码", "FWD_SMS_DEL" },
+    { "增加转发号码",     "FWD_SMS_ADD" },
+    { "添加转发号码",     "FWD_SMS_ADD" },
+    { "增加转发目标",     "FWD_SMS_ADD" },
+    { "添加转发目标",     "FWD_SMS_ADD" },
+    { "删除转发号码",     "FWD_SMS_DEL" },
+    { "移除转发号码",     "FWD_SMS_DEL" },
+    { "删除转发目标",     "FWD_SMS_DEL" },
+    -- 通道配置
+    { "查看转发",     "FWD_READ" },
+    { "转发状态",     "FWD_READ" },
+    { "设置钉钉",     "DING_SET" },
+    { "配置钉钉",     "DING_SET" },
+    { "设置飞书",     "FS_SET" },
+    { "配置飞书",     "FS_SET" },
+    { "设置微信推送", "SC_SET" },
+    { "配置微信推送", "SC_SET" },
+    { "转发",         "FWD_READ" },
+    -- 通用通道动词（free：通道名可直接拼接，且降序保证最后才尝试）
+    { "开启",         "CH_ON",  true },
+    { "关闭",         "CH_OFF", true },
+    { "清空",         "CH_CLR", true },
+}
+
+-- 按短语长度降序排列（最长优先匹配）
+table.sort(PHRASES, function(a, b) return #a[1] > #b[1] end)
+
+-- 匹配命令短语：命中返回 cmd 与短语后剩余文本，未命中返回 nil
+local function match_phrase(body)
+    for _, e in ipairs(PHRASES) do
+        local ph, cmd, free = e[1], e[2], e[3]
+        if body:sub(1, #ph) == ph then
+            local nxt = body:sub(#ph + 1, #ph + 1)
+            if free or nxt == "" or nxt:match(SEP) then
+                return cmd, body:sub(#ph + 1)
+            end
+        end
+    end
+    return nil
 end
 
 --[[
 解析短信文本。
 参数：
-  text    短信原文
+  text     短信原文
   password 当前密码（"" 或 nil 表示密码模式关闭）
 返回：
-  成功: { cmd = "FWD", op = "read|write|exec|test", args = {...}, via_password = bool }
-  失败: nil（不是命令）
+  成功: { cmd = "ST"|..., args = {...}, via_password = bool }（cmd 为空串=链路探测）
+  前缀命中但短语未识别: { cmd = nil, args = {}, via_password = bool }
+  失败: nil（不是命令，调用方按普通短信转发）
 ]]
 function sp_at.parse(text, password)
     if type(text) ~= "string" then return nil end
-    -- 全角归一后再剔除空白：鸽+ST？ / 鸽＋ST? / 鸽＋ＳＴ？ 等写法均可识别
-    local s = sp_at.trim(to_halfwidth(text))
+    local s = normalize(text)
     if s == "" then return nil end
 
-    local rest         -- 前缀之后的部分
+    local rest          -- 前缀之后的部分
     local via_password = false
 
     if password and password ~= "" then
-        -- 密码模式：必须以密码开头，且剩余部分为空或以"+"开头。
-        -- 追加"+"约束是为了排除形如密码"12"、短信"12鸽+X"的歧义匹配。
+        -- 密码模式：必须以密码开头，其后为空或跟分隔符
+        -- （分隔符约束排除形如密码"12"、短信"12信鸽，X"的歧义匹配）
         if s:sub(1, #password) == password then
             local r = s:sub(#password + 1)
-            if r == "" or r:sub(1, 1) == "+" then
+            if r == "" or r:sub(1, 1):match(SEP) then
                 rest, via_password = r, true
             end
         end
@@ -82,48 +207,33 @@ function sp_at.parse(text, password)
     else
         if s:sub(1, #PREFIX) ~= PREFIX then return nil end
         rest = s:sub(#PREFIX + 1)
+        -- 前缀后必须为空或跟分隔符："信鸽子汤"这类正常短信不误判
+        if rest ~= "" and not rest:sub(1, 1):match(SEP) then return nil end
     end
 
-    rest = sp_at.trim(rest)
-
-    -- 裸前缀（"鸽" 或密码单独出现）：链路探测
+    -- 去掉前缀后的分隔符
+    rest = rest:gsub("^" .. SEP .. "+", "")
+    -- 裸前缀（"信鸽" 或密码单独出现）：链路探测
     if rest == "" then
-        return { cmd = "", op = "exec", args = {}, via_password = via_password }
+        return { cmd = "", args = {}, via_password = via_password }
     end
 
-    if rest:sub(1, 1) ~= "+" then return nil end
-    rest = rest:sub(2)
-
-    -- 拆出命令名与操作类型
-    local q = rest:find("?", 1, true)
-    local e = rest:find("=", 1, true)
-    local name, op, argstr
-    if e and q == e + 1 and q == #rest then
-        -- 鸽+CMD=? 测试形式（"?" 必须是最后一个字符）
-        name, op = rest:sub(1, e - 1), "test"
-    elseif q and q == #rest then
-        -- 鸽+CMD? 查询形式（"?" 必须是最后一个字符）
-        name, op = rest:sub(1, q - 1), "read"
-    elseif e then
-        -- 鸽+CMD=A,B 设置形式（参数中允许出现 "?"，如带查询串的 URL）
-        name, op, argstr = rest:sub(1, e - 1), "write", rest:sub(e + 1)
-    else
-        -- 鸽+CMD 执行形式
-        name, op = rest, "exec"
+    local cmd, after = match_phrase(rest)
+    if not cmd then
+        -- 前缀命中但短语未识别：按未知命令处理（不进入转发）
+        return { cmd = nil, args = {}, via_password = via_password }
     end
 
-    name = sp_at.trim(name):upper()
-    if name == "" or not name:match("^[A-Z0-9_]+$") then return nil end
-
-    -- 拆分参数：按英文逗号分隔，保留空参数（"鸽+PW=" 用于清空密码）
+    -- 提取参数：去掉短语后的分隔符，按逗号拆分（保留参数内的冒号与空格）
+    after = after:gsub("^" .. SEP .. "+", "")
     local args = {}
-    if argstr then
-        for a in (argstr .. ","):gmatch("([^,]*),") do
+    if after ~= "" then
+        for a in (after .. ","):gmatch("([^,]*),") do
             args[#args + 1] = sp_at.trim(a)
         end
     end
 
-    return { cmd = name, op = op, args = args, via_password = via_password }
+    return { cmd = cmd, args = args, via_password = via_password }
 end
 
 return sp_at

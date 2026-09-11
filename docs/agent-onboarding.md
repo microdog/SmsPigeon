@@ -52,7 +52,8 @@ SmsPigeon 是运行在 Air780EHV（LuatOS）上的短信转发固件：
 
 ## 文档维护责任
 
-- 命令变更 → [docs/commands.md](commands.md) 与 `sp_commands.lua`
-  的 HELP 输出保持一致；
+- 命令变更 → [docs/commands.md](commands.md) 与 `sp_commands.lua` 的帮助输出
+  保持一致（自然命令短语在 `sp_at.lua` 的 `PHRASES` 表，命令语义在
+  `sp_commands.lua` 的 `CMDS` 表，两处需同步）
 - 文件/职责/接口变更 → [docs/codebase-map.md](codebase-map.md)；
 - 面向用户的烧录/上手流程变更 → [README.md](../README.md)。

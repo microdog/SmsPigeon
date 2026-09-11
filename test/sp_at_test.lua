@@ -1,5 +1,5 @@
 --[[
-sp_at 解析器单元测试：鸽+ 语法、密码模式、边界与非法输入。
+sp_at 解析器单元测试：中文句子命令、前缀规则、密码模式、全角/中文数字归一。
 ]]
 
 local sp_at = require "sp_at"
@@ -13,103 +13,156 @@ local function eq(got, want, msg)
     n = n + 1
 end
 
+--------------------------------------------------------------------------
 -- 基本形式
-local p = sp_at.parse("鸽+ST?", "")
-eq(p.cmd, "ST", "查询命令名")
-eq(p.op, "read", "查询操作")
-eq(#p.args, 0, "查询无参数")
+--------------------------------------------------------------------------
 
-p = sp_at.parse("鸽+st?", "")
-eq(p.cmd, "ST", "命令名大小写不敏感")
+local p = sp_at.parse("信鸽，状态", "")
+eq(p.cmd, "ST", "状态命令")
+eq(#p.args, 0, "状态无参数")
 
-p = sp_at.parse("鸽+FWD=DING,SET,https://oapi.dingtalk.com/robot/send?access_token=abc", "")
-eq(p.cmd, "FWD", "设置命令名")
-eq(p.op, "write", "设置操作")
-eq(p.args[1], "DING", "参数1")
-eq(p.args[2], "SET", "参数2")
-eq(p.args[3], "https://oapi.dingtalk.com/robot/send?access_token=abc", "URL参数保留原样")
+p = sp_at.parse("信鸽", "")
+eq(p.cmd, "", "裸前缀为链路探测")
 
-p = sp_at.parse("鸽+ST", "")
-eq(p.op, "exec", "执行操作")
+p = sp_at.parse("信鸽，帮助", "")
+eq(p.cmd, "HELP", "帮助命令")
 
-p = sp_at.parse("鸽+ST=?", "")
-eq(p.op, "test", "测试操作")
+p = sp_at.parse("信鸽，版本", "")
+eq(p.cmd, "VER", "版本命令")
 
-p = sp_at.parse("鸽", "")
-eq(p.cmd, "", "裸前缀为探测命令")
-eq(p.op, "exec", "探测为exec")
+-- 分隔符自由：逗号/空格/冒号/顿号/句号均可
+p = sp_at.parse("信鸽 状态", "")
+eq(p.cmd, "ST", "空格分隔")
+p = sp_at.parse("信鸽：状态", "")
+eq(p.cmd, "ST", "全角冒号分隔")
+p = sp_at.parse("信鸽、状态", "")
+eq(p.cmd, "ST", "顿号分隔")
+p = sp_at.parse("信鸽。状态", "")
+eq(p.cmd, "ST", "句号分隔")
+p = sp_at.parse("信鸽，状态。", "")
+eq(p.cmd, "ST", "句尾句号")
 
-p = sp_at.parse("  鸽+ST? \r\n", "")
-eq(p.cmd, "ST", "首尾空白被剔除")
+-- 全角归一
+p = sp_at.parse("信鸽，状态？", "")
+eq(p.cmd, "ST", "全角问号归一后仍是状态")
 
-p = sp_at.parse("　鸽+ST?", "")
-eq(p.cmd, "ST", "全角空格被剔除")
+-- 首尾空白
+p = sp_at.parse("  信鸽，状态 \r\n", "")
+eq(p.cmd, "ST", "首尾空白剔除")
 
--- 空参数（清除密码用）
-p = sp_at.parse("鸽+PW=", "")
-eq(p.op, "write", "空值仍是write")
-eq(#p.args, 1, "空值产生1个空参数")
-eq(p.args[1], "", "空参数值为空串")
+-- 别名
+p = sp_at.parse("信鸽，查询状态", "")
+eq(p.cmd, "ST", "查询状态别名")
+p = sp_at.parse("信鸽，查看状态", "")
+eq(p.cmd, "ST", "查看状态别名")
+p = sp_at.parse("信鸽，命令列表", "")
+eq(p.cmd, "HELP", "命令列表别名")
 
--- 非命令
+--------------------------------------------------------------------------
+-- 参数
+--------------------------------------------------------------------------
+
+-- 用户实测原句：全角冒号引出参数
+p = sp_at.parse("信鸽，增加短信转发号码：13262575718", "")
+eq(p.cmd, "FWD_SMS_ADD", "用户原句命令")
+eq(p.args[1], "13262575718", "用户原句参数")
+
+p = sp_at.parse("信鸽，增加白名单，13800138000", "")
+eq(p.cmd, "WL_ADD", "增加白名单")
+eq(p.args[1], "13800138000", "白名单参数")
+
+-- 分组号码：横线/空格保留在参数内
+p = sp_at.parse("信鸽，增加白名单，132-6257-5718", "")
+eq(p.args[1], "132-6257-5718", "横线分组保留为单参数")
+
+-- URL 参数：冒号不拆分，密钥为第二参数
+local url = "https://oapi.dingtalk.com/robot/send?access_token=abc"
+p = sp_at.parse("信鸽，设置钉钉，" .. url .. "，SECxxx", "")
+eq(p.cmd, "DING_SET", "设置钉钉")
+eq(p.args[1], url, "URL 参数完整保留(含冒号双斜杠)")
+eq(p.args[2], "SECxxx", "密钥为第二参数")
+
+-- 通用动词：开启<通道>（无分隔符直接拼接）
+p = sp_at.parse("信鸽，开启钉钉", "")
+eq(p.cmd, "CH_ON", "开启通道")
+eq(p.args[1], "钉钉", "通道名参数")
+p = sp_at.parse("信鸽，开启 短信", "")
+eq(p.cmd, "CH_ON", "开启通道(空格)")
+eq(p.args[1], "短信", "通道名参数(空格)")
+p = sp_at.parse("信鸽，开启，飞书", "")
+eq(p.cmd, "CH_ON", "开启通道(逗号)")
+eq(p.args[1], "飞书", "通道名参数(逗号)")
+
+-- 最长优先：开启白名单 是完整命令而非"开启+白名单"
+p = sp_at.parse("信鸽，开启白名单", "")
+eq(p.cmd, "WL_ON", "最长匹配:开启白名单")
+p = sp_at.parse("信鸽，关闭白名单", "")
+eq(p.cmd, "WL_OFF", "最长匹配:关闭白名单")
+
+--------------------------------------------------------------------------
+-- 非命令与未知命令
+--------------------------------------------------------------------------
+
 eq(sp_at.parse("hello", ""), nil, "普通短信")
-eq(sp_at.parse("鸽子汤多少钱", ""), nil, "正常中文短信不误判")
-eq(sp_at.parse("鸽+汤", ""), nil, "前缀后必须接合法命令名")
-eq(sp_at.parse("鸽+", ""), nil, "+后无命令名")
-eq(sp_at.parse("鸽+ST?a", ""), nil, "命令名含非法字符")
--- 全角归一（真机案例：中文输入法敲出 鸽+ST？ 全角问号）
-p = sp_at.parse("鸽+ST？", "")
-eq(p.cmd, "ST", "全角问号识别为查询")
-eq(p.op, "read", "全角问号操作为read")
-
-p = sp_at.parse("鸽＋ST?", "")
-eq(p.cmd, "ST", "全角加号识别")
-
-p = sp_at.parse("鸽＋ＳＴ？", "")
-eq(p.cmd, "ST", "全角加号+全角命令名+全角问号")
-
-p = sp_at.parse("鸽+WL＝ON", "")
-eq(p.op, "write", "全角等号识别为设置")
-eq(p.args[1], "ON", "全角等号参数正常")
-
-p = sp_at.parse("鸽+FWD=SMS,ADD，13800138000", "")
-eq(#p.args, 3, "全角逗号按分隔符拆分")
-eq(p.args[3], "13800138000", "全角逗号参数内容正确")
-
-p = sp_at.parse("８８８８+ST?", "8888")
-eq(p.cmd, "ST", "全角数字密码匹配")
-eq(p.via_password, true, "全角数字密码via_password")
-
+eq(sp_at.parse("鸽子汤多少钱", ""), nil, "旧单字前缀不再识别")
+eq(sp_at.parse("信鸽子汤很好喝", ""), nil, "信鸽开头但无分隔符,不是命令")
+eq(sp_at.parse("AT+ST?", ""), nil, "AT 前缀不再识别")
 eq(sp_at.parse("", ""), nil, "空串")
 eq(sp_at.parse(nil, ""), nil, "nil输入")
 
--- AT 前缀已完全移除
-eq(sp_at.parse("AT+ST?", ""), nil, "AT前缀不再识别")
-eq(sp_at.parse("AT", ""), nil, "裸AT不再识别")
-eq(sp_at.parse("at+st?", ""), nil, "小写at同样不识别")
+p = sp_at.parse("信鸽，今天天气不错", "")
+eq(p.cmd, nil, "未知短语返回cmd=nil")
+p = sp_at.parse("信鸽，状态栏", "")
+eq(p.cmd, nil, "短语后无分隔符(状态栏)不算状态命令")
 
+--------------------------------------------------------------------------
+-- 字节类地雷回归：多字节字符不得被 trim/归一/数字转换破坏
+--（[、。] 等含多字节字面量的字符类会退化为字节集合，曾吃掉"态"的 80/81 字节）
+--------------------------------------------------------------------------
+
+eq(sp_at.trim("状态"), "状态", "trim不破坏含80/81字节的汉字")
+eq(sp_at.trim(" 态 "), "态", "trim保留汉字本体")
+eq(sp_at.trim("　状态　"), "状态", "trim剔除全角空格保留汉字")
+eq(sp_at.cn_digits("状态"), "状态", "中文数字转换不破坏非数字汉字")
+local pst = sp_at.parse("信鸽，状态", "")
+eq(pst ~= nil and pst.cmd, "ST", "状态命令在归一后仍可识别")
+p = sp_at.parse("信鸽，今天天气不错", "")
+eq(p.cmd, nil, "未知短语返回cmd=nil")
+p = sp_at.parse("信鸽，状态栏", "")
+eq(p.cmd, nil, "短语后无分隔符(状态栏)不算状态命令")
+
+--------------------------------------------------------------------------
 -- 密码模式
-p = sp_at.parse("8888+ST?", "8888")
+--------------------------------------------------------------------------
+
+p = sp_at.parse("8888，状态", "8888")
 eq(p.cmd, "ST", "密码前缀命令")
 eq(p.via_password, true, "标记via_password")
-eq(p.op, "read", "密码模式查询操作")
 
 p = sp_at.parse("8888", "8888")
-eq(p.cmd, "", "裸密码为探测命令")
+eq(p.cmd, "", "裸密码为链路探测")
 eq(p.via_password, true, "裸密码via_password")
 
-eq(sp_at.parse("鸽+ST?", "8888"), nil, "密码模式下默认前缀失效")
-eq(sp_at.parse("8888鸽+ST?", "8888"), nil, "密码后必须紧跟+号")
-eq(sp_at.parse("9999+ST?", "8888"), nil, "错误密码")
+eq(sp_at.parse("信鸽，状态", "8888"), nil, "密码模式下默认前缀失效")
+eq(sp_at.parse("8888状态", "8888"), nil, "密码后必须跟分隔符")
+eq(sp_at.parse("9999，状态", "8888"), nil, "错误密码")
 
--- 密码歧义边界：单字符密码
-p = sp_at.parse("A+ST?", "A")
-eq(p.cmd, "ST", "单字符密码正常匹配")
-eq(sp_at.parse("AT+ST?", "A"), nil, "单字符密码不吞AT前缀")
+-- 中文密码
+p = sp_at.parse("蓝色风筝，状态", "蓝色风筝")
+eq(p.cmd, "ST", "中文密码命令")
+eq(p.via_password, true, "中文密码via_password")
 
--- 密码含+号
-p = sp_at.parse("12+34+ST?", "12+34")
-eq(p.cmd, "ST", "含+号密码正常匹配")
+--------------------------------------------------------------------------
+-- 中文数字与数字提取
+--------------------------------------------------------------------------
+
+eq(sp_at.digits("一三二六二五七五七一八"), "13262575718", "中文数字逐位转换")
+eq(sp_at.digits("幺三八零零幺三八零零零"), "13800138000", "幺/零读法")
+eq(sp_at.digits("两二三三"), "2233", "两=2")
+eq(sp_at.digits("1三2四"), "1324", "中英混合数字")
+eq(sp_at.digits("132-6257-5718"), "13262575718", "分组写法剔除横线")
+eq(sp_at.digits("+86 13800138000"), "8613800138000", "剔除+与空格")
+eq(sp_at.digits("〇"), "0", "〇=0")
 
 -- trim 工具
 eq(sp_at.trim("  x  "), "x", "trim基本")
