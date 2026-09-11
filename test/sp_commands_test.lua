@@ -458,6 +458,19 @@ eq(pok, true, "失败路径不抛错")
 eq(res, false, "通道返回失败")
 n = n + 1
 
+-- L6：按契约返回 nil, err 的通道必须记为失败（旧代码只判 false，
+-- nil 会被误记成功）
+sp_channels.register {
+    key = "_test_nil_ch", name = "测试nil通道", needs_net = false,
+    is_configured = function() return true end,
+    send = function() return nil, "接口限流" end,
+}
+local fwd2 = { _test_nil_ch = { on = true } }
+local dres2 = sp_channels.dispatch(
+    { sender = "10086", text = "x", time = "t", prefix = "" }, fwd2)
+eq(type(dres2._test_nil_ch), "string", "nil+err返回被记为失败(字符串原因)")
+contains(dres2._test_nil_ch, "接口限流", "失败原因透传")
+
 --------------------------------------------------------------------------
 -- 重启与恢复出厂
 --------------------------------------------------------------------------

@@ -213,7 +213,7 @@ AT+CCFC），而 Air780EHV 的 LuatOS 固件不暴露 USSD/CCFC 接口
        name = "某平台",
        needs_net = true,     -- HTTP 类通道为 true
        is_configured = function(chcfg) ... end,   -- 配置是否完整
-       send = function(msg, chcfg) ... end,        -- 返回 true 或 nil, err
+      send = function(msg, chcfg) ... end,        -- 返回 true 才算成功；false/nil 均为失败(可带原因)
    }
    ```
 

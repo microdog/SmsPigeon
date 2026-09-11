@@ -51,17 +51,19 @@ function sp_channels.dispatch(msg, fwdcfg)
         local ch = registry[key]
         local chcfg = fwdcfg[key]
         if ch and chcfg and chcfg.on and ch.is_configured(chcfg) then
-            -- pcall 只区分"是否抛错"；通道自身返回 false 表示发送失败
+            -- pcall 只区分"是否抛错"；通道契约：返回 true 才算成功，
+            -- false/nil/其它值一律按失败记录原因（nil+err 形态此前
+            -- 会被误记为成功）
             local ok, sent_ok, err = pcall(ch.send, msg, chcfg)
-            if ok and sent_ok ~= false then
-                results[key] = true
-                log.info("sp_channels", "转发成功:", ch.name)
-            elseif ok then
-                results[key] = "发送失败: " .. tostring(err)
-                log.warn("sp_channels", "转发失败:", ch.name, tostring(err))
-            else
+            if not ok then
                 results[key] = "执行异常: " .. tostring(sent_ok)
                 log.warn("sp_channels", "转发异常:", ch.name, tostring(sent_ok))
+            elseif sent_ok == true then
+                results[key] = true
+                log.info("sp_channels", "转发成功:", ch.name)
+            else
+                results[key] = "发送失败: " .. tostring(err or "通道未返回成功")
+                log.warn("sp_channels", "转发失败:", ch.name, tostring(err or "通道未返回成功"))
             end
         end
     end
