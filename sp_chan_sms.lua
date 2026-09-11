@@ -1,7 +1,7 @@
 --[[
 @module  sp_chan_sms
 @summary SmsPigeon 转发通道：短信（转发到指定手机号）
-@version 1.3
+@version 1.4
 @date    2026.09.11
 @usage
 配置结构（sp_config.defaults().fwd.sms）：
@@ -39,8 +39,15 @@ function ch.send(msg, chcfg)
     local text
     if msg.kind == "call" then
         text = string.format("%s来电:%s%s", msg.prefix or "", msg.sender, ident)
+    elseif msg.kind == "hb" then
+        -- 心跳：模块在线摘要（sp_heartbeat 生成，正文已压缩）
+        text = string.format("%s在线%s\n%s", msg.prefix or "", ident, msg.text)
     else
-        text = string.format("%s来自 %s%s:\n%s", msg.prefix or "", msg.sender, ident, msg.text)
+        -- 验证码前置行（提取不到为空串）：通知栏预览直接看到验证码；
+        -- 提取逻辑与网络通道共用 sp_channels.extract_code
+        local c = (msg.pick_code ~= false) and sp_channels.extract_code(msg.text) or nil
+        text = string.format("%s%s来自 %s%s:\n%s", msg.prefix or "",
+            c and ("[验证码:" .. c .. "]\n") or "", msg.sender, ident, msg.text)
     end
     -- 防环：末行附加本机实例标记（随机 8 位十六进制）。sp_forward 收到
     -- 含本机标记的短信直接丢弃；纯随机串无固定词，不构成跨设备特征

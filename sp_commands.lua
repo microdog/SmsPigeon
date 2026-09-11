@@ -1,7 +1,7 @@
 --[[
 @module  sp_commands
 @summary SmsPigeon 短信命令处理模块（中文句子命令表 + 执行 + 应答文案）
-@version 2.1
+@version 2.2
 @date    2026.09.11
 @usage
 命令总览（详见 docs/commands.md，全部以"信鸽"为前缀）：
@@ -33,11 +33,12 @@
 本模块依赖 sp_platform（硬件访问）与 sp_channels（通道注册表）。
 ]]
 
-local sp_at       = require "sp_at"
-local sp_auth     = require "sp_auth"
-local sp_config   = require "sp_config"
-local sp_platform = require "sp_platform"
-local sp_channels = require "sp_channels"
+local sp_at        = require "sp_at"
+local sp_auth      = require "sp_auth"
+local sp_config    = require "sp_config"
+local sp_platform  = require "sp_platform"
+local sp_channels  = require "sp_channels"
+local sp_heartbeat = require "sp_heartbeat"
 
 local sp_commands = {}
 
@@ -97,6 +98,8 @@ local function cmd_init(cfg, args, sender)
     cfg.whitelist = { n }
     sp_config.save()
     log.info("sp_commands", "固件初始化完成，白名单：", n)
+    -- 初始化完成才可能布防心跳（hb_hours 默认 0 = 关，空操作居多）
+    sp_heartbeat.restart()
     return "OK:SmsPigeon 已初始化\n" .. n .. " 已加入白名单\n发送 信鸽，帮助 查看命令"
 end
 
@@ -122,6 +125,9 @@ local function cmd_st(cfg, args, sender)
             return id ~= "" and id or "无"
         end)(),
         "来电提醒:" .. (cfg.call_notify and "开" or "关"),
+        "心跳:" .. ((cfg.hb_hours or 0) > 0 and (cfg.hb_hours .. "小时") or "关"),
+        "过滤:拉黑" .. #(cfg.blocklist or {}) .. "个,过滤词" .. #(cfg.kwords or {}) .. "个",
+        "验证码提取:" .. (cfg.code_pick and "开" or "关"),
         "通道:",
     }
     for _, key in ipairs(sp_channels.keys()) do
@@ -383,6 +389,181 @@ local function cmd_calln_off(cfg, args, sender)
 end
 
 --------------------------------------------------------------------------
+-- 运行统计（sp_forward 计数器；惰性 require 避开与本模块的加载环）
+--------------------------------------------------------------------------
+
+local function cmd_stats(cfg, args, sender)
+    local st = require "sp_forward".stats()
+    return "OK:运行统计(重启后清零):\n"
+        .. string.format("累计转发:%d 条\n失败:%d 条(全部通道失败)\n丢弃:%d 条(队列溢出)\n过滤:%d 条(黑名单/过滤词)\n待发:%d 条",
+            st.sent, st.fail, st.dropped, st.filtered, st.pending)
+end
+
+local function cmd_stats_reset(cfg, args, sender)
+    require "sp_forward".reset_stats()
+    return "OK:统计已清零"
+end
+
+--------------------------------------------------------------------------
+-- 心跳报平安（sp_heartbeat 定时向转发目标推送在线摘要）
+--------------------------------------------------------------------------
+
+local function cmd_hb_read(cfg, args, sender)
+    local h = cfg.hb_hours or 0
+    return "OK:心跳:" .. (h > 0 and ("每" .. h .. "小时") or "关")
+        .. "\n到期向已启用的转发目标推送在线状态摘要"
+end
+
+local function cmd_hb_set(cfg, args, sender)
+    -- digits 返回 (串, gsub 替换数) 双值：直接做 tonumber 末位实参会把
+    -- 替换数当进制参数（tonumber("24",1)=nil），先落局部变量截断
+    local d = sp_at.digits(args[1] or "")
+    local h = tonumber(d)
+    if not sp_heartbeat.valid_hours(h) then
+        return "ERROR:间隔需 1-168 的整数小时\n用法 信鸽，设置心跳，24"
+    end
+    cfg.hb_hours = h
+    sp_config.save()
+    sp_heartbeat.restart()
+    return "OK:心跳已设置,每 " .. h .. " 小时报一次平安\n短信通道启用时心跳计话费,纯网络通道免费"
+end
+
+local function cmd_hb_off(cfg, args, sender)
+    cfg.hb_hours = 0
+    sp_config.save()
+    sp_heartbeat.restart()
+    return "OK:心跳已关闭"
+end
+
+--------------------------------------------------------------------------
+-- 转发过滤：黑名单（发件人）与过滤词（正文），命中静默丢弃并计数。
+-- 只作用于转发路径，不影响命令鉴权（白名单/密码照常独立判定）
+--------------------------------------------------------------------------
+
+local function blk_full(cfg)
+    return #cfg.blocklist >= sp_config.MAX_LIST
+end
+
+local function cmd_blk_add(cfg, args, sender)
+    local n = sp_auth.normalize_number(args[1])
+    if not n or #n < 5 then
+        return "ERROR:号码无效\n用法 信鸽，拉黑，<号码>"
+    end
+    for _, b in ipairs(cfg.blocklist) do
+        if b == n then return "OK:" .. n .. " 已在黑名单" end
+    end
+    if blk_full(cfg) then
+        return "ERROR:黑名单已满(" .. sp_config.MAX_LIST .. "个)"
+    end
+    cfg.blocklist[#cfg.blocklist + 1] = n
+    sp_config.save()
+    return "OK:" .. n .. " 已拉黑,其来信不再转发(其命令鉴权不受影响)"
+end
+
+local function cmd_blk_del(cfg, args, sender)
+    local n = sp_auth.normalize_number(args[1])
+    for i, b in ipairs(cfg.blocklist) do
+        if b == n then
+            table.remove(cfg.blocklist, i)
+            sp_config.save()
+            return "OK:" .. n .. " 已移出黑名单"
+        end
+    end
+    return "ERROR:号码不在黑名单"
+end
+
+local function cmd_blk_read(cfg, args, sender)
+    local lines = {}
+    for _, b in ipairs(cfg.blocklist) do lines[#lines + 1] = b end
+    return "OK:黑名单(" .. #lines .. "/" .. sp_config.MAX_LIST .. "):\n"
+        .. (#lines > 0 and table.concat(lines, "\n") or "(空)")
+end
+
+-- 过滤词有效性：字符数 1-10（utf8.len 计字符不计字节，中文安全）
+local function kw_valid(w)
+    local n = utf8 and utf8.len and utf8.len(w)
+    return n ~= nil and n >= 1 and n <= sp_config.MAX_KEYWORD
+end
+
+local function cmd_kw_add(cfg, args, sender)
+    local added, skipped = 0, 0
+    for _, a in ipairs(args) do
+        local w = sp_at.trim(tostring(a or ""))
+        local dup = false
+        for _, k in ipairs(cfg.kwords) do
+            if k == w then dup = true break end
+        end
+        if not kw_valid(w) or dup or #cfg.kwords >= sp_config.MAX_LIST then
+            skipped = skipped + 1
+        else
+            cfg.kwords[#cfg.kwords + 1] = w
+            added = added + 1
+        end
+    end
+    if added == 0 then
+        return "ERROR:无有效新词(1-" .. sp_config.MAX_KEYWORD .. "字,可批量)\n用法 信鸽，添加过滤词，词1，词2"
+    end
+    sp_config.save()
+    return "OK:已添加 " .. added .. " 个过滤词,命中来信不再转发"
+        .. (skipped > 0 and ("\n跳过 " .. skipped .. " 个(重复/无效/已满)") or "")
+end
+
+local function cmd_kw_del(cfg, args, sender)
+    local removed = 0
+    for _, a in ipairs(args) do
+        local w = sp_at.trim(tostring(a or ""))
+        for i, k in ipairs(cfg.kwords) do
+            if k == w then
+                table.remove(cfg.kwords, i)
+                removed = removed + 1
+                break
+            end
+        end
+    end
+    if removed == 0 then return "ERROR:词不在过滤词列表" end
+    sp_config.save()
+    return "OK:已删除 " .. removed .. " 个过滤词"
+end
+
+local function cmd_kw_read(cfg, args, sender)
+    local lines = {}
+    for _, k in ipairs(cfg.kwords) do lines[#lines + 1] = k end
+    return "OK:过滤词(" .. #lines .. "/" .. sp_config.MAX_LIST .. "):\n"
+        .. (#lines > 0 and table.concat(lines, "\n") or "(空)")
+end
+
+--------------------------------------------------------------------------
+-- 验证码提取（转发文案首行附 [验证码:xxxx]，通知栏预览直接可见）
+--------------------------------------------------------------------------
+
+local function cmd_codep_read(cfg, args, sender)
+    return "OK:验证码提取:" .. (cfg.code_pick and "开" or "关")
+        .. "\n正文含 验证码/校验码 等触发词时,转发首行附 [验证码:xxxx]"
+end
+
+local function cmd_codep_on(cfg, args, sender)
+    cfg.code_pick = true
+    sp_config.save()
+    return "OK:验证码提取已开启"
+end
+
+local function cmd_codep_off(cfg, args, sender)
+    cfg.code_pick = false
+    sp_config.save()
+    return "OK:验证码提取已关闭,转发不再附验证码行"
+end
+
+--------------------------------------------------------------------------
+-- 失败暂存重发（sp_forward 暂存队列的手动排空入口）
+--------------------------------------------------------------------------
+
+local function cmd_retry(cfg, args, sender)
+    local n = require "sp_forward".retry_now()
+    if n == 0 then return "OK:无暂存消息" end
+    return "OK:已重新入队 " .. n .. " 条暂存消息,随转发队列发出"
+end
+
+--------------------------------------------------------------------------
 -- 转发通道
 --------------------------------------------------------------------------
 
@@ -618,6 +799,21 @@ CMDS = {
     { cmd = "CALLN_READ", usage = "信鸽，来电提醒",             run = cmd_calln_read },
     { cmd = "CALLN_ON",   usage = "信鸽，开启来电提醒",          run = cmd_calln_on },
     { cmd = "CALLN_OFF",  usage = "信鸽，关闭来电提醒",          run = cmd_calln_off },
+    { cmd = "ST_STATS",   usage = "信鸽，统计",                  run = cmd_stats },
+    { cmd = "ST_RESET",   usage = "信鸽，清零统计",              run = cmd_stats_reset },
+    { cmd = "HB_READ",    usage = "信鸽，心跳",                  run = cmd_hb_read },
+    { cmd = "HB_SET",     usage = "信鸽，设置心跳，<小时1-168>",  run = cmd_hb_set },
+    { cmd = "HB_OFF",     usage = "信鸽，关闭心跳",              run = cmd_hb_off },
+    { cmd = "BLK_READ",   usage = "信鸽，拉黑列表",              run = cmd_blk_read },
+    { cmd = "BLK_ADD",    usage = "信鸽，拉黑，<号码>",           run = cmd_blk_add },
+    { cmd = "BLK_DEL",    usage = "信鸽，取消拉黑，<号码>",       run = cmd_blk_del },
+    { cmd = "KW_READ",    usage = "信鸽，过滤词",                run = cmd_kw_read },
+    { cmd = "KW_ADD",     usage = "信鸽，添加过滤词，<词>[，<词>...]", run = cmd_kw_add },
+    { cmd = "KW_DEL",     usage = "信鸽，删除过滤词，<词>[，<词>...]", run = cmd_kw_del },
+    { cmd = "CODEP_READ", usage = "信鸽，验证码",                run = cmd_codep_read },
+    { cmd = "CODEP_ON",   usage = "信鸽，开启验证码",             run = cmd_codep_on },
+    { cmd = "CODEP_OFF",  usage = "信鸽，关闭验证码",             run = cmd_codep_off },
+    { cmd = "RETRY_NOW",  usage = "信鸽，重发",                  run = cmd_retry },
     { cmd = "CH_ON",      usage = "信鸽，开启<通道>",            run = cmd_ch_on },
     { cmd = "CH_OFF",     usage = "信鸽，关闭<通道>",            run = cmd_ch_off },
     { cmd = "CH_CLR",     usage = "信鸽，清空<通道>",            run = cmd_ch_clr },

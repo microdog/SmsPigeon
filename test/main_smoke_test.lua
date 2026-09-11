@@ -29,7 +29,7 @@ dofile(dir .. "/../main.lua")
 
 eq(type(MOCKS.sms_cb), "function", "main装配后短信回调已注册")
 eq(PROJECT, "SmsPigeon", "PROJECT全局变量")
-eq(VERSION, "1.1.0", "VERSION全局变量")
+eq(VERSION, "1.2.0", "VERSION全局变量")
 
 -- 状态灯模块：模式决策纯函数 + 活动闪烁接口
 local sp_led = require "sp_led"
@@ -138,5 +138,55 @@ base = run_new_tasks(base)
 MOCKS.publish("CC_IND", "INCOMINGCALL")
 base = run_new_tasks(base)
 eq(#MOCKS.sent, 30, "关闭来电提醒后不再提醒(30=29+关闭应答)")
+
+-- 心跳：设置 → 布防 → 到期推送 → 关闭撤防（网络监视定时器常驻，按周期区分）
+local function hb_timer(hours)
+    local ms = hours * 3600 * 1000
+    for _, t in ipairs(MOCKS.timers) do
+        if t.ms == ms then return t end
+    end
+end
+MOCKS.sms_cb("13800138000", "信鸽，设置心跳，24")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 31, "设置心跳有应答(30+1)")
+assert(hb_timer(24) ~= nil, "24小时心跳定时器已布防")
+n = n + 1
+hb_timer(24).fn()
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 32, "心跳经短信通道推送(31+1)")
+local hbmsg = MOCKS.sent[#MOCKS.sent]
+eq(hbmsg.num, "13911112222", "心跳发往转发目标")
+assert(hbmsg.text:find("在线", 1, true), "心跳文本含在线")
+assert(hbmsg.text:find("信号:", 1, true), "心跳文本含信号")
+n = n + 3
+MOCKS.sms_cb("13800138000", "信鸽，关闭心跳")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 33, "关闭心跳有应答")
+eq(hb_timer(24), nil, "关闭后心跳定时器撤防")
+
+-- 过滤与统计：拉黑 → 来信被滤 → 统计可查 → 清零
+local sp_forward = require "sp_forward"
+MOCKS.sms_cb("13800138000", "信鸽，拉黑，10086")
+base = run_new_tasks(base)
+MOCKS.sms_cb("10086", "被拉黑的来信")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 34, "拉黑应答发出(33+1),来信被过滤不转发")
+eq(sp_forward.stats().filtered, 1, "过滤计数=1")
+MOCKS.sms_cb("13800138000", "信鸽，统计")
+base = run_new_tasks(base)
+assert(MOCKS.sent[#MOCKS.sent].text:find("过滤:1 条", 1, true), "统计应答含过滤计数")
+n = n + 2
+MOCKS.sms_cb("13800138000", "信鸽，清零统计")
+base = run_new_tasks(base)
+eq(sp_forward.stats().filtered, 0, "统计已清零")
+eq(#MOCKS.sent, 36, "统计+清零两条应答(34+2)")
+
+-- 网络失联自愈：装配即布防 5 分钟轮询（细节见 sp_net_test）
+local sp_net
+for _, t in ipairs(MOCKS.timers) do
+    if t.ms == 300000 and t.loop then sp_net = t.fn end
+end
+assert(sp_net ~= nil, "网络监视轮询定时器已布防")
+n = n + 1
 
 print(string.format("PASS main_smoke_test (%d assertions)", n))

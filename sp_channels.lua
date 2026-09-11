@@ -1,7 +1,7 @@
 --[[
 @module  sp_channels
 @summary SmsPigeon 转发通道注册表与公共网络工具
-@version 1.0
+@version 1.2
 @date    2026.09.11
 @usage
 统一转发通道接口（新增转发渠道 = 编写 sp_chan_xxx.lua + 在 main.lua require + 注册）：
@@ -120,6 +120,35 @@ function sp_channels.form_encode(params)
     return table.concat(parts, "&")
 end
 
+-- 验证码触发词：正文含任一词才尝试提取（避免日期/单号等纯数字误报）
+local CODE_TRIGGERS = {
+    "验证码", "校验码", "动态码", "授权码", "认证码", "取件码", "效验码",
+}
+
+-- 从正文中提取疑似验证码：首个"独立的 4-8 位数字串"。
+-- 跳过超长数字串（11 位手机号/单号）继续向后找；无触发词或找不到
+-- 返回 nil。纯函数，两条通道共用。
+function sp_channels.extract_code(text)
+    if type(text) ~= "string" then return nil end
+    local hit = false
+    for _, w in ipairs(CODE_TRIGGERS) do
+        if text:find(w, 1, true) then hit = true break end
+    end
+    if not hit then return nil end
+    for run in text:gmatch("%d+") do
+        if #run >= 4 and #run <= 8 then return run end
+    end
+    return nil
+end
+
+-- 短信正文的验证码前置行（msg.pick_code 为 false 或提取不到则空串）：
+-- 置于文案首行，手机/webhook 通知预览即可直接看到验证码
+local function code_line(msg)
+    if msg.pick_code == false then return "" end
+    local c = sp_channels.extract_code(msg.text)
+    return c and ("[验证码:" .. c .. "]\n") or ""
+end
+
 -- 网络类通道统一的转发文本。msg.prefix 为用户自定义前缀（默认空串），
 -- 不再内置任何固定标识，避免出栈短信携带可被运营商过滤的特征；
 -- msg.identity 为设备标识（多设备同群区分来源，"" 则不携带）
@@ -130,8 +159,13 @@ function sp_channels.format_text(msg)
         return string.format("%s来电提醒:号码 %s%s\n时间: %s\n固件不接听,如需通话请回拨",
             msg.prefix or "", msg.sender, ident, msg.time)
     end
-    return string.format("%s收到来自 %s 的短信%s\n时间: %s\n\n%s",
-        msg.prefix or "", msg.sender, ident, msg.time, msg.text)
+    -- 心跳（msg.kind == "hb"）：msg.text 为固件自产的状态摘要
+    if msg.kind == "hb" then
+        return string.format("%s心跳:模块在线%s\n时间: %s\n%s",
+            msg.prefix or "", ident, msg.time, msg.text)
+    end
+    return string.format("%s%s收到来自 %s 的短信%s\n时间: %s\n\n%s",
+        msg.prefix or "", code_line(msg), msg.sender, ident, msg.time, msg.text)
 end
 
 return sp_channels

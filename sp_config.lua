@@ -1,7 +1,7 @@
 --[[
 @module  sp_config
 @summary SmsPigeon 配置持久化模块（基于 fskv 键值存储）
-@version 1.2
+@version 1.3
 @date    2026.09.11
 @usage
 本模块负责所有用户配置的读写、默认值合并与恢复出厂设置。
@@ -29,9 +29,16 @@ local KEY_ICCID = "sp_iccid"   -- 最近一次绑定的 SIM 卡 ICCID(复位判�
 local KEY_NOSIM = "sp_nosim" -- 连续无卡开机计数
 local KEY_MARK = "sp_mark"  -- 防环实例标记(随机hex,不随恢复出厂清除:无鉴权作用,清除反而留下无标记空窗)
 local KEY_CALLN = "sp_calln" -- 来电提醒开关(收到来电时向转发目标发提醒)
+local KEY_HB    = "sp_hb"    -- 心跳间隔小时数(0=关,默认关,仅已初始化时生效)
+local KEY_BLOCK = "sp_block" -- 转发黑名单(发件人号码,归一化存储,命中不转发)
+local KEY_KWF   = "sp_kwf"   -- 过滤词列表(正文命中任一词不转发)
+local KEY_CODEP = "sp_codep" -- 验证码提取开关(转发文案前附验证码行)
+local KEY_RETRY = "sp_retry" -- 转发失败暂存队列(最多 sp_config.RETRY_MAX 条)
 
 -- 恢复出厂时清除的键（sp_mark 刻意不在其中，见其注释）
-local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_IDENT, KEY_FWD, KEY_ICCID, KEY_NOSIM, KEY_CALLN }
+local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_IDENT,
+    KEY_FWD, KEY_ICCID, KEY_NOSIM, KEY_CALLN, KEY_HB, KEY_BLOCK, KEY_KWF,
+    KEY_CODEP, KEY_RETRY }
 
 -- 配置缓存（由 init() 填充）
 local cache = nil
@@ -41,6 +48,10 @@ sp_config.MAX_LIST = 10
 
 -- 转发前缀的长度上限（字符数，中文算 1 个）
 sp_config.MAX_PREFIX = 30
+
+-- 过滤词的长度上限（字符数）；失败暂存队列的容量上限（闪存寿命保护）
+sp_config.MAX_KEYWORD = 20
+sp_config.RETRY_MAX = 5
 
 --[[
 返回一份全新默认配置：
@@ -67,6 +78,10 @@ function sp_config.defaults()
             wecom      = { on = false, key = "" },        -- 企业微信消息推送（原群机器人）
         },
         call_notify = true,                                -- 来电提醒：收到来电时向转发目标发提醒
+        hb_hours = 0,                                      -- 心跳间隔小时数：0=关（默认关）
+        blocklist = {},                                    -- 转发黑名单（归一化号码，命中静默丢弃）
+        kwords = {},                                       -- 过滤词（正文命中任一词静默丢弃）
+        code_pick = true,                                  -- 验证码提取：转发文案前置 [验证码:xxxx] 行
         mark = "",                                         -- 防环实例标记（内部字段，sp_forward 首启生成）
         iccid = "",                                       -- SIM 卡绑定信息（内部字段）
         nosim_cnt = 0,                                    -- 连续无卡开机计数（内部字段）
@@ -117,6 +132,35 @@ local function load_cfg()
     end
     v = fskv.get(KEY_CALLN)
     if type(v) == "boolean" then cfg.call_notify = v end
+
+    v = fskv.get(KEY_HB)
+    if type(v) == "number" then cfg.hb_hours = math.floor(v) end
+
+    -- 列表键（黑名单/过滤词）：与白名单同款容错合并
+    v = fskv.get(KEY_BLOCK)
+    if type(v) == "table" then
+        local t = {}
+        for _, n in ipairs(v) do
+            if type(n) == "string" and n ~= "" and #t < sp_config.MAX_LIST then
+                t[#t + 1] = n
+            end
+        end
+        cfg.blocklist = t
+    end
+
+    v = fskv.get(KEY_KWF)
+    if type(v) == "table" then
+        local t = {}
+        for _, w in ipairs(v) do
+            if type(w) == "string" and w ~= "" and #t < sp_config.MAX_LIST then
+                t[#t + 1] = w
+            end
+        end
+        cfg.kwords = t
+    end
+
+    v = fskv.get(KEY_CODEP)
+    if type(v) == "boolean" then cfg.code_pick = v end
 
     v = fskv.get(KEY_MARK)
     if type(v) == "string" and v ~= "" then cfg.mark = v end
@@ -169,7 +213,35 @@ function sp_config.save()
     end
     ok = kv_set(KEY_FWD, c.fwd) and ok
     ok = kv_set(KEY_CALLN, c.call_notify) and ok
+    ok = kv_set(KEY_HB, c.hb_hours or 0) and ok
+    ok = kv_set(KEY_BLOCK, c.blocklist) and ok
+    ok = kv_set(KEY_KWF, c.kwords) and ok
+    ok = kv_set(KEY_CODEP, c.code_pick) and ok
     return ok
+end
+
+--------------------------------------------------------------------------
+-- 转发失败暂存队列（独立于 cfg 缓存：容量受 RETRY_MAX 限制，仅在
+-- 全部通道失败时写入，网络恢复后由 sp_forward 重发——写频极低，
+-- 兼顾闪存寿命。随恢复出厂清除（上一任机主的未送达内容不得外泄）
+--------------------------------------------------------------------------
+-- 读取暂存列表（损坏数据容错；超过容量的尾部截断）
+function sp_config.load_retry()
+    local v = fskv.get(KEY_RETRY)
+    if type(v) ~= "table" then return {} end
+    local t = {}
+    for _, e in ipairs(v) do
+        if type(e) == "table" and type(e.txt) == "string"
+            and #t < sp_config.RETRY_MAX then
+            t[#t + 1] = { kind = e.kind, num = e.num, txt = e.txt, time = e.time }
+        end
+    end
+    return t
+end
+
+-- 整体写入暂存列表（容量由调用方保证）
+function sp_config.save_retry(list)
+    return kv_set(KEY_RETRY, list)
 end
 
 -- 记录当前绑定的 SIM 卡 ICCID

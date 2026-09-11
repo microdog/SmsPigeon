@@ -23,6 +23,9 @@ local TESTS = {
     "sp_config_test",
     "sp_commands_test",
     "sp_call_test",
+    "sp_forward_test",
+    "sp_heartbeat_test",
+    "sp_net_test",
     "sp_sim_guard_test",
     "main_smoke_test",
 }

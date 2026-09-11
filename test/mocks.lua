@@ -1,7 +1,7 @@
 --[[
 @module  test/mocks
 @summary LuatOS 全局 API 的内存桩（单元测试专用，不烧录进固件）
-@version 1.0
+@version 1.1
 @date    2026.09.11
 @usage
 提供 fskv/log/sys/mobile/sms/http/socket/rtos/json/VERSION 的最小替身，
@@ -16,6 +16,9 @@
   MOCKS.sms_cb  sms.setNewSmsCb 注册的回调
   MOCKS.subs    sys.subscribe 订阅表 {topic={fn,...}}（MOCKS.publish 驱动）
   MOCKS.cc_lastnum cc.lastNum 桩返回值（来电号码，nil=未知号码）
+  MOCKS.timers  sys.timerStart/timerLoop 注册的定时器 {fn=,ms=,loop=} 列表
+                （timerStop(fn) 移除；测试直接调用 .fn() 驱动）
+  MOCKS.sms_send_fail 置 true 时 sms.send 返回失败（转发失败路径注入）
 
 opts 可设置初始 imei/iccid/csq/version。
 ]]
@@ -35,7 +38,7 @@ function M.install(opts)
     local store, sent = {}, {}
     MOCKS = {
         store = store, sent = sent, reboots = 0, tasks = {},
-        subs = {}, cc_lastnum = nil,
+        subs = {}, cc_lastnum = nil, timers = {}, sms_send_fail = false,
         mobile = {
             imei  = opts.imei or "860123456789012",
             iccid = opts.iccid or "",
@@ -68,8 +71,18 @@ function M.install(opts)
                 if f == fn then table.remove(t, i) break end
             end end
         end,
-        timerStart  = function() end,
-        timerStop   = function() end,
+        -- 定时器只记录不计时：测试按需直接调用 MOCKS.timers[i].fn()
+        timerStart  = function(fn, ms)
+            MOCKS.timers[#MOCKS.timers + 1] = { fn = fn, ms = ms, loop = false }
+        end,
+        timerLoop   = function(fn, ms)
+            MOCKS.timers[#MOCKS.timers + 1] = { fn = fn, ms = ms, loop = true }
+        end,
+        timerStop   = function(fn)
+            for i = #MOCKS.timers, 1, -1 do
+                if MOCKS.timers[i].fn == fn then table.remove(MOCKS.timers, i) end
+            end
+        end,
         run         = function() end,   -- 供 main.lua 装配冒烟测试
     }
     -- 向全部订阅者发布一条系统消息（模拟 sys.publish）
@@ -113,6 +126,7 @@ function M.install(opts)
 
     sms = {
         send = function(num, text)
+            if MOCKS.sms_send_fail then return false end
             sent[#sent + 1] = { num = num, text = text }
             return true
         end,

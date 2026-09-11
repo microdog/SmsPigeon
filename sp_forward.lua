@@ -1,7 +1,7 @@
 --[[
 @module  sp_forward
 @summary SmsPigeon 转发引擎（短信入口：命令分流 + 消息转发）
-@version 1.5
+@version 1.6
 @date    2026.09.11
 @usage
 本模块注册短信接收回调，是所有收到短信的唯一入口：
@@ -30,6 +30,7 @@ local sp_commands = require "sp_commands"
 local sp_config   = require "sp_config"
 local sp_channels = require "sp_channels"
 local sp_platform = require "sp_platform"
+local sp_auth     = require "sp_auth"
 local sp_led      = require "sp_led"
 
 local sms = sms
@@ -39,6 +40,8 @@ local log = log
 local sp_forward = {}
 
 local enqueue_forward   -- 前置声明：on_sms 在定义前引用（见下方队列节）
+local filtered = 0      -- 前置声明：on_sms 先于队列节引用（命中过滤的丢弃计数）
+local spool             -- 前置声明：fwd_worker 先于失败暂存节的定义引用
 local function on_sms(num, txt, metas)
     -- 只记号码与长度，不落正文：命令短信含密码/token，第三方短信
     -- 内容同样不应进日志（排障需要正文时临时发 信鸽，调试，开）
@@ -87,6 +90,23 @@ local function on_sms(num, txt, metas)
         log.info("sp_forward", "固件未初始化，短信不转发")
         return
     end
+    -- 3. 转发过滤（只作用于转发，不影响命令鉴权）：黑名单号码或正文
+    -- 命中过滤词 → 静默丢弃并计数（信鸽，统计 可查丢弃原因分布）
+    local sender_n = sp_auth.normalize_number(num)
+    for _, b in ipairs(cfg.blocklist or {}) do
+        if sender_n and b == sender_n then
+            filtered = filtered + 1
+            log.info("sp_forward", "发件人已拉黑,丢弃短信", num)
+            return
+        end
+    end
+    for _, kw in ipairs(cfg.kwords or {}) do
+        if txt:find(kw, 1, true) then
+            filtered = filtered + 1
+            log.info("sp_forward", "正文命中过滤词,丢弃短信", num)
+            return
+        end
+    end
     enqueue_forward(num, txt)
 end
 
@@ -100,14 +120,17 @@ local QUEUE_MAX    = 20     -- 队列上限（溢出丢最旧）
 local FWD_INTERVAL = 2000   -- 两次转发之间的最小间隔（ms，限速）
 
 local queue = {}
-local dropped = 0
+local dropped = 0        -- 队列溢出丢最旧计数
+local sent = 0           -- 至少一个通道成功的事件数
+local fail = 0           -- 有通道被尝试但全部失败的事件数
+-- filtered 已在文件头部前置声明（on_sms 先于此处引用）
 local worker_running = false
 
 local function fwd_worker()
     while #queue > 0 do
         local m = table.remove(queue, 1)
         local cfg = sp_config.get()
-        sp_channels.dispatch({
+        local results = sp_channels.dispatch({
             kind = m.kind or "sms",
             sender = m.num,
             text = m.txt,
@@ -115,17 +138,37 @@ local function fwd_worker()
             prefix = cfg.prefix or "",   -- 用户自定义转发前缀，默认空
             identity = sp_commands.resolve_identity(cfg), -- 设备标识（自动/自定义/关闭）
             mark = cfg.mark or "",       -- 防环实例标记（短信通道附加）
+            pick_code = cfg.code_pick,   -- 验证码提取开关（nil 视为开）
         }, cfg.fwd)
+        -- 结果统计：≥1 通道成功计 sent；有尝试但全失败计 fail，
+        -- 且首次失败暂存（网络恢复后自动重发，重试失败则永久丢弃）
+        local attempted, any_ok = false, false
+        for _, v in pairs(results) do
+            attempted = true
+            if v == true then any_ok = true end
+        end
+        if attempted then
+            if any_ok then
+                sent = sent + 1
+            else
+                fail = fail + 1
+                if not (m.tries and m.tries >= 1) then spool(m) end
+            end
+        end
         if #queue > 0 then sys.wait(FWD_INTERVAL) end
     end
     worker_running = false
 end
 
--- 事件入队：kind 为 "sms"（普通短信转发）或 "call"（来电提醒），
--- 通道按 msg.kind 渲染对应文案；共用同一队列与限速（来电提醒同样
--- 受洪泛保护与 2s 间隔约束）
-local function push_event(kind, num, txt)
-    queue[#queue + 1] = { kind = kind, num = num, txt = txt, time = os.date("%Y-%m-%d %H:%M:%S") }
+-- 事件入队：kind 为 "sms"（普通短信转发）/"call"（来电提醒）/
+-- "hb"（心跳报平安），通道按 msg.kind 渲染对应文案；共用同一队列
+-- 与限速（来电/心跳同样受洪泛保护与 2s 间隔约束）。
+-- time/tries 供失败暂存重发时保留原始时间戳与重试标记
+local function push_event(kind, num, txt, time, tries)
+    queue[#queue + 1] = {
+        kind = kind, num = num, txt = txt, tries = tries,
+        time = time or os.date("%Y-%m-%d %H:%M:%S"),
+    }
     if #queue > QUEUE_MAX then
         table.remove(queue, 1)
         dropped = dropped + 1
@@ -146,9 +189,58 @@ function sp_forward.notify_call(num)
     push_event("call", num)
 end
 
--- 队列运行状态（排障/测试观测用）
+-- 心跳入口（sp_heartbeat 调用）：txt 为固件自产状态摘要
+function sp_forward.notify_hb(txt)
+    push_event("hb", "", txt)
+end
+
+--------------------------------------------------------------------------
+-- 失败暂存重发：全部通道失败的事件存 fskv（容量 sp_config.RETRY_MAX，
+-- 仅失败时写入，写频极低以护闪存寿命），网络就绪（IP_READY）或
+-- 信鸽，重发 时重新入队；重试一次仍失败则永久丢弃（防往复打环）
+--------------------------------------------------------------------------
+spool = function(m)
+    local list = sp_config.load_retry()
+    while #list >= sp_config.RETRY_MAX do
+        table.remove(list, 1)   -- 丢最旧
+    end
+    list[#list + 1] = { kind = m.kind, num = m.num, txt = m.txt, time = m.time }
+    sp_config.save_retry(list)
+    log.warn("sp_forward", "全部通道失败,已暂存待重发", #list)
+end
+
+local function drain_retry()
+    if not sp_config.get().initialized then return 0 end
+    local list = sp_config.load_retry()
+    if #list == 0 then return 0 end
+    sp_config.save_retry({})
+    for _, e in ipairs(list) do
+        push_event(e.kind or "sms", e.num, e.txt, e.time, 1)   -- tries=1：重试不再暂存
+    end
+    log.info("sp_forward", "网络恢复,重发暂存消息", #list, "条")
+    return #list
+end
+
+-- 手动重发入口（信鸽，重发 命令）：返回重发条数
+function sp_forward.retry_now()
+    return drain_retry()
+end
+
+if sys and sys.subscribe then
+    sys.subscribe("IP_READY", function() drain_retry() end)
+end
+
+-- 队列运行状态（排障/信鸽，统计 命令用）
 function sp_forward.stats()
-    return { pending = #queue, dropped = dropped }
+    return {
+        pending = #queue, dropped = dropped,
+        sent = sent, fail = fail, filtered = filtered,
+    }
+end
+
+-- 清零统计（信鸽，清零统计 命令用；不影响待发队列）
+function sp_forward.reset_stats()
+    dropped, sent, fail, filtered = 0, 0, 0, 0
 end
 
 -- 注册短信回调：优先 setNewSmsCb，不支持时退回系统消息
