@@ -43,7 +43,10 @@ end
 
 -- 分发一条短信到所有"已启用且配置完整"的通道。
 -- 阻塞执行（HTTP 通道内部会等待联网），必须在 task 上下文中调用。
+-- 返回结果表 results[key]：true=发送成功，字符串=失败/异常原因
+-- （仅包含被尝试的通道；未启用/未配置的通道不在表内）
 function sp_channels.dispatch(msg, fwdcfg)
+    local results = {}
     for _, key in ipairs(order) do
         local ch = registry[key]
         local chcfg = fwdcfg[key]
@@ -51,14 +54,18 @@ function sp_channels.dispatch(msg, fwdcfg)
             -- pcall 只区分"是否抛错"；通道自身返回 false 表示发送失败
             local ok, sent_ok, err = pcall(ch.send, msg, chcfg)
             if ok and sent_ok ~= false then
+                results[key] = true
                 log.info("sp_channels", "转发成功:", ch.name)
             elseif ok then
+                results[key] = "发送失败: " .. tostring(err)
                 log.warn("sp_channels", "转发失败:", ch.name, tostring(err))
             else
+                results[key] = "执行异常: " .. tostring(sent_ok)
                 log.warn("sp_channels", "转发异常:", ch.name, tostring(sent_ok))
             end
         end
     end
+    return results
 end
 
 --------------------------------------------------------------------------

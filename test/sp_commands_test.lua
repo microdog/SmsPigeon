@@ -380,9 +380,10 @@ eq(sp_config.get().prefix, "", "前缀已清空")
 
 local sent_before = #MOCKS.sent
 local cfg = sp_config.get()
-sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-11 10:00:00",
+local dres = sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-11 10:00:00",
     prefix = cfg.prefix or "" }, cfg.fwd)
 eq(#MOCKS.sent - sent_before, 1, "分发触发1条短信转发")
+eq(dres.sms, true, "dispatch结果:短信通道成功")
 local out = MOCKS.sent[#MOCKS.sent]
 eq(out.num, "13262575718", "转发到配置的目标")
 contains(out.text, "10086", "转发文本包含来信号码")

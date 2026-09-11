@@ -50,6 +50,7 @@
   `sp_commands.CH_ALIAS` 增别名 + `main.lua` 增 require
   （详见 README「添加新转发通道」）
 - **所有出栈短信**统一走 `sp_platform.send_sms`/`send_sms_sync`
+- **dispatch 返回各通道结果表**：`results[key]=true|失败原因`（仅被尝试通道）
   （就绪等待 + SMS_SENT 结果日志；命令应答/远程发短信/短信通道转发）
 - **适配新模组**：只改 `sp_platform.lua`；LuatOS API 在 Air780E 系列通用
 - **Webhook 加签**：`sp_chan_dingtalk`（毫秒+URL编码）/`sp_chan_feishu`
