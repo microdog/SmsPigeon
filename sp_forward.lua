@@ -37,8 +37,9 @@ local sp_forward = {}
 
 -- 短信入口（V2050+ 回调第三参数 metas 携带短信中心时间戳）
 local function on_sms(num, txt, metas)
-    -- 无条件打印每条收到的短信（内容+号码），先于任何鉴权/分流
-    log.info("sp_forward", "收到短信", num, txt)
+    -- 只记号码与长度，不落正文：命令短信含密码/token，第三方短信
+    -- 内容同样不应进日志（排障需要正文时临时发 信鸽，调试，开）
+    log.info("sp_forward", "收到短信", num, "长度", tostring(#txt))
     if type(metas) == "table" then
         -- SCTS：短信中心下发时间。若与你发送时刻相差很大，
         -- 说明短信在运营商侧滞留/延迟投递，不是固件问题。

@@ -64,11 +64,23 @@ end
 -- 短信发送出口（系统 sms API 的唯一发送路径）
 --------------------------------------------------------------------------
 
--- 开启内核短信调试日志（官方 sms.debug 开关）：
--- 打印收发短信的 PDU 级细节，排查"短信是否到达模组"类问题必需
-if sms and sms.debug then
-    sms.debug(true)
+-- 内核短信调试日志（PDU 级，含短信全文）：默认关闭——开启后收发
+-- 内容会落入日志。排障时用 信鸽，调试，开 临时打开，重启自动复位
+local sms_debug_on = false
+local function apply_sms_debug()
+    if sms and sms.debug then sms.debug(sms_debug_on) end
 end
+
+function sp_platform.set_sms_debug(on)
+    sms_debug_on = (on == true)
+    apply_sms_debug()
+end
+
+function sp_platform.sms_debug_on()
+    return sms_debug_on
+end
+
+apply_sms_debug()
 
 -- 短信收发是否就绪（就绪后缓存，避免重复等待）
 local sms_ready = false

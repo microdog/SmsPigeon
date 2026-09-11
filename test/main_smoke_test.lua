@@ -38,7 +38,7 @@ eq(sp_led.pattern_for(false, true), "fast", "状态灯:未注册已初始化仍�
 eq(sp_led.pattern_for(true, false), "slow", "状态灯:未初始化心跳")
 eq(sp_led.pattern_for(true, true), "on", "状态灯:正常常亮")
 sp_led.blink()   -- 活动闪烁接口，即便未驱动任务也应无害
-eq(MOCKS.sms_debug, true, "内核短信调试日志已开启(sms.debug)")
+eq(MOCKS.sms_debug, false, "内核短信调试日志默认关闭(sms.debug)")
 
 -- 未初始化：命令无应答、普通短信不转发
 local base = #MOCKS.tasks
@@ -64,9 +64,20 @@ eq(#MOCKS.sent, 2, "信鸽探测应答已发出")
 assert(MOCKS.sent[2].text:find("OK", 1, true), "信鸽应答为OK")
 n = n + 1
 
+-- S2：调试命令可运行时开关内核短信日志（默认关）
+MOCKS.sms_cb("13800138000", "信鸽，调试，开")
+base = run_new_tasks(base)
+eq(MOCKS.sms_debug, true, "调试命令开启内核短信日志")
+eq(#MOCKS.sent, 3, "调试命令有应答")
+MOCKS.sms_cb("13800138000", "信鸽，调试，关")
+base = run_new_tasks(base)
+eq(MOCKS.sms_debug, false, "调试命令关闭内核短信日志")
+eq(#MOCKS.sent, 4, "调试命令有应答")
+n = n + 2
+
 -- 初始化后：普通短信走转发（无通道配置 → 无发送、无报错）
 MOCKS.sms_cb("10086", "余额:10元")
 base = run_new_tasks(base)
-eq(#MOCKS.sent, 2, "无通道配置时转发不产生短信")
+eq(#MOCKS.sent, 4, "无通道配置时转发不产生短信")
 
 print(string.format("PASS main_smoke_test (%d assertions)", n))

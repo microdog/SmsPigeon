@@ -518,6 +518,20 @@ local function cmd_sc_set(cfg, args, sender)
 end
 
 --------------------------------------------------------------------------
+-- 内核短信调试日志开关（运行时，不持久化，重启自动复位为关）
+local function cmd_dbg(cfg, args, sender)
+    local a = args[1] or ""
+    if a == "开" or a == "开启" then
+        sp_platform.set_sms_debug(true)
+        return "OK:内核短信调试日志已开启(含PDU与内容,重启后自动关闭)"
+    end
+    if a == "关" or a == "关闭" then
+        sp_platform.set_sms_debug(false)
+        return "OK:内核短信调试日志已关闭"
+    end
+    return "OK:调试日志:" .. (sp_platform.sms_debug_on() and "开" or "关")
+        .. "\n用法 信鸽，调试，开 或 信鸽，调试，关"
+end
 -- 复位与重启
 --------------------------------------------------------------------------
 
@@ -579,6 +593,7 @@ CMDS = {
     { cmd = "SC_SET",     usage = "信鸽，设置Server酱，<SendKey>", run = cmd_sc_set },
     { cmd = "WECOM_SET",  usage = "信鸽，设置企业微信，<key或webhook>", run = cmd_wecom_set },
     { cmd = "RESET",      usage = "信鸽，恢复出厂",             run = cmd_reset },
+    { cmd = "DBG",       usage = "信鸽，调试，[开/关]",          run = cmd_dbg },
     { cmd = "REBOOT",     usage = "信鸽，重启",                 run = cmd_reboot },
 }
 
