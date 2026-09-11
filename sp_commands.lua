@@ -387,6 +387,8 @@ end
 local function cmd_fwd_sms_add(cfg, args, sender)
     local n = sp_auth.normalize_number(args[1])
     if not num_valid(n) then return "ERROR:号码无效" end
+    -- targets 缺失时重建（防御手改/损坏的持久化数据）
+    if type(cfg.fwd.sms.targets) ~= "table" then cfg.fwd.sms.targets = {} end
     local t = cfg.fwd.sms.targets
     for _, x in ipairs(t) do
         if x == n then return "ERROR:号码已在转发列表" end
@@ -402,6 +404,7 @@ end
 local function cmd_fwd_sms_del(cfg, args, sender)
     local n = sp_auth.normalize_number(args[1])
     if not num_valid(n) then return "ERROR:号码无效" end
+    if type(cfg.fwd.sms.targets) ~= "table" then cfg.fwd.sms.targets = {} end
     for i, x in ipairs(cfg.fwd.sms.targets) do
         if x == n then
             table.remove(cfg.fwd.sms.targets, i)
@@ -438,7 +441,9 @@ local function cmd_ch_clr(cfg, args, sender)
     local key = channel_of(args[1])
     if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱/企业微信" end
     local ch = sp_channels.get(key)
-    cfg.fwd[key] = { on = false }
+    -- 重置为该通道的默认配置形状：整体替换会丢字段（曾因 { on=false }
+    -- 丢掉 targets，导致后续 增加转发号码 ipairs(nil) 抛错）
+    cfg.fwd[key] = sp_config.defaults().fwd[key]
     sp_config.save()
     return "OK:" .. ch.name .. "配置已清空"
 end

@@ -222,6 +222,13 @@ contains(reply, "OK", "添加短信转发目标")
 is_cmd, reply = send(ME, "信鸽，增加短信转发号码：一三二六二五七五七一八")
 contains(reply, "ERROR", "中文数字重复添加报错(等效同一号码)")
 
+-- Q3 回归：清空短信通道后立即增加转发号码不异常（targets 结构保留）
+is_cmd, reply = send(ME, "信鸽，清空短信")
+contains(reply, "OK", "清空短信通道")
+eq(type(sp_config.get().fwd.sms.targets), "table", "清空后 targets 结构仍在")
+is_cmd, reply = send(ME, "信鸽，增加转发号码，13262575718")
+contains(reply, "OK", "清空后重新添加转发号码")
+
 is_cmd, reply = send(ME, "信鸽，开启短信转发")
 contains(reply, "OK", "开启短信通道")
 
