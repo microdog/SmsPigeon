@@ -46,6 +46,13 @@ eq(p.cmd, "ST", "句尾句号")
 p = sp_at.parse("信鸽，状态？", "")
 eq(p.cmd, "ST", "全角问号归一后仍是状态")
 
+-- 全角字母（含小写，EF BD 段）：L1 回归
+p = sp_at.parse("信鸽，设置标识，Ａｂｃ", "")
+eq(p.cmd, "IDENT_SET", "全角字母不破坏短语匹配")
+eq(p.args[1], "Abc", "全角大小写字母归一为半角")
+p = sp_at.parse("信鸽，设置Server酱，ＳＣＴｔｅｓｔ", "")
+eq(p.args[1], "SCTtest", "全角混合串整体归一")
+
 -- 首尾空白
 p = sp_at.parse("  信鸽，状态 \r\n", "")
 eq(p.cmd, "ST", "首尾空白剔除")

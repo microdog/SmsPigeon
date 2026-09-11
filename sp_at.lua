@@ -55,12 +55,17 @@ local CN_DIGIT = {
 
 --[[
 全角 ASCII（！～，U+FF01-FF5E）转半角。
-中文输入法常敲出全角符号（？＝＋，）与全角数字/字母，统一归一后再解析。
-UTF-8 编码：U+FF01-FF5E = EF BC 81-DE，映射为原码减 0x60。
+中文输入法常敲出全角符号（？＝＋，）与全角数字/大小写字母，统一归一
+后再解析。UTF-8 编码分两段：U+FF01-FF3F = EF BC 81-BF（映射 -0x60），
+U+FF40-FF5E = EF BD 80-9E（跨过 continuation 边界 0xBF/0x80，
+映射 -0x20）。只匹配 EF BC 时全角小写 ａ-ｚ（EF BD 81-9A）永不归一。
 ]]
 local function to_halfwidth(s)
-    return (s:gsub("\239\188([\129-\222])", function(c)
+    s = s:gsub("\239\188([\129-\191])", function(c)
         return string.char(string.byte(c) - 96)
+    end)
+    return (s:gsub("\239\189([\128-\158])", function(c)
+        return string.char(string.byte(c) - 32)
     end))
 end
 
