@@ -1,7 +1,7 @@
 --[[
 @module  sp_forward
 @summary SmsPigeon 转发引擎（短信入口：命令分流 + 消息转发）
-@version 1.0
+@version 1.1
 @date    2026.09.11
 @usage
 本模块注册短信接收回调，是所有短信的唯一入口：
@@ -12,6 +12,12 @@
    - 未初始化：直接丢弃（不转发）；
    - 已初始化：分发到所有已启用且配置完整的转发通道。
 
+短信收发就绪说明：
+- SMS_READY/CC_IND 是开机时一次性广播的事件，晚订阅会永远错过
+  （真机日志验证：开机 11 秒广播、380 秒后才等 → 每条应答白等 30 秒）；
+  因此模块加载（开机即执行）时就订阅置位，应答前检查立即短路；
+- 两事件都未广播的旧固件上，就绪检查超时后仍尝试发送（已验证可成功）。
+
 防环说明：本机转发出的短信格式固定带【SmsPigeon】前缀；若收到他人转发的
 副本，除非发送者恰好在白名单内且内容恰好是合法命令，否则只会再次被转发，
 不会形成循环。请勿将本机号码自身加入白名单或转发列表。
@@ -21,10 +27,19 @@ local sp_commands = require "sp_commands"
 local sp_config   = require "sp_config"
 local sp_channels = require "sp_channels"
 local sp_platform = require "sp_platform"
+local sp_led      = require "sp_led"
 
 local sp_forward = {}
 
--- 等待短信收发就绪：优先等 SMS_READY（新内核固件），超时回退 CC_IND
+-- 短信收发是否就绪（就绪后缓存，避免重复等待）
+local sms_ready = false
+
+-- 开机即订阅：捕获一次性的 SMS_READY/CC_IND 广播
+sys.subscribe("SMS_READY", function() sms_ready = true end)
+sys.subscribe("CC_IND", function() sms_ready = true end)
+
+-- 等待短信收发就绪：优先 SMS_READY（新内核固件），回退 CC_IND；
+-- 就绪标志已被开机订阅置位时立即返回；都未广播时超时后仍尝试发送
 local function ensure_sms_ready()
     if sms_ready then return true end
     if sys.waitUntil("SMS_READY", 10000) then
@@ -56,6 +71,7 @@ end
 -- 短信入口
 local function on_sms(num, txt)
     log.info("sp_forward", "收到短信", num, txt)
+    sp_led.blink()   -- 状态灯三连闪提示短信到达
 
     -- 1. 命令分流
     local is_cmd, reply, action = sp_commands.handle(num, txt)

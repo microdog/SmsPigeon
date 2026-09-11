@@ -19,3 +19,6 @@
 - 防捡漏自毁：SIM 卡变更、连续第 3 次无卡开机自动恢复出厂
 - 纯 Lua 5.3 单元测试套件（含 LuatOS API 桩与 main.lua 装配冒烟），
   GitHub Actions CI（lua5.3 测试 + luacheck 静态检查）
+- 状态灯支持（整机开发板 NET 灯，GPIO27）：网络/初始化状态指示与
+  短信到达三连闪；修复应答短信错过开机 SMS_READY/CC_IND 广播后
+  每条白等 30 秒的问题

@@ -37,9 +37,9 @@ function M.install(opts)
             imei  = opts.imei or "860123456789012",
             iccid = opts.iccid or "",
             csq   = opts.csq or 25,
+            status = opts.status or 1,   -- 默认已注册（mobile.REGISTERED）
         },
     }
-
     fskv = {
         init = function() return true end,
         set  = function(k, v) store[k] = deep(v) return true end,
@@ -73,6 +73,19 @@ function M.install(opts)
         imei  = function() return MOCKS.mobile.imei end,
         iccid = function() return MOCKS.mobile.iccid end,
         csq   = function() return MOCKS.mobile.csq end,
+        status = function() return MOCKS.mobile.status end,
+        -- 与桩返回值配套的注册状态常量（仅测试环境语义）
+        REGISTERED = 1,
+        REGISTERED_ROAMING = 2,
+    }
+
+    gpio = {
+        setup = function(pin, level)
+            MOCKS.gpio_setup = { pin = pin, level = level }
+        end,
+        set = function(pin, level)
+            MOCKS.gpio_last = { pin = pin, level = level }
+        end,
     }
 
     sms = {

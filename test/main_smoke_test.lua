@@ -31,6 +31,14 @@ eq(type(MOCKS.sms_cb), "function", "main装配后短信回调已注册")
 eq(PROJECT, "SmsPigeon", "PROJECT全局变量")
 eq(VERSION, "1.0.0", "VERSION全局变量")
 
+-- 状态灯模块：模式决策纯函数 + 活动闪烁接口
+local sp_led = require "sp_led"
+eq(sp_led.pattern_for(false, false), "fast", "状态灯:无网络快闪")
+eq(sp_led.pattern_for(false, true), "fast", "状态灯:未注册已初始化仍快闪")
+eq(sp_led.pattern_for(true, false), "slow", "状态灯:未初始化心跳")
+eq(sp_led.pattern_for(true, true), "on", "状态灯:正常常亮")
+sp_led.blink()   -- 活动闪烁接口，即便未驱动任务也应无害
+
 -- 未初始化：命令无应答、普通短信不转发
 local base = #MOCKS.tasks
 MOCKS.sms_cb("13800138000", "AT+ST?")

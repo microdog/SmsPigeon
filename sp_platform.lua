@@ -39,6 +39,26 @@ function sp_platform.iccid()
     return ""
 end
 
+-- 网络是否已注册（含漫游）
+function sp_platform.registered()
+    if mobile and mobile.status and mobile.REGISTERED then
+        local s = mobile.status()
+        return s == mobile.REGISTERED or s == mobile.REGISTERED_ROAMING
+    end
+    return false
+end
+
+--------------------------------------------------------------------------
+-- 板级状态灯（NET 灯）
+--------------------------------------------------------------------------
+
+-- Air780Exx 整机开发板 V1.4 的 NET 状态灯由模组 GPIO27 控制
+-- （高电平点亮：GPIO → 4.7k 电阻 → NPN MMBT3904 → LED）。
+-- 核心板没有此灯，置 nil 即关闭状态灯功能（sp_led 模块自动停用）；
+-- 其它板型若灯的逻辑相反，改 LED_ACTIVE_HIGH 为 false。
+sp_platform.LED_GPIO = 27
+sp_platform.LED_ACTIVE_HIGH = true
+
 -- 信号强度 CSQ（状态查询用）
 function sp_platform.csq()
     if mobile and mobile.csq then

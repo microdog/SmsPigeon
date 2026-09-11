@@ -52,6 +52,7 @@ require "sp_chan_serverchan"    -- Server酱通道
 require "sp_commands"           -- 短信命令处理
 require "sp_forward"            -- 短信入口（命令 + 转发）
 require "sp_sim_guard"          -- SIM 卡守护
+require "sp_led"                -- 状态灯（整机开发板 NET 灯）
 
 -- 启动系统调度（必须放在最后）
 sys.run()

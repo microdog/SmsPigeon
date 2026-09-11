@@ -11,7 +11,8 @@
 | `main.lua` | 入口：PROJECT/VERSION 与模块装配顺序（顺序有依赖，勿乱动） | `PROJECT` `VERSION` `sys.run` |
 | `sp_config.lua` | 配置缓存、fskv 读写、默认值合并、恢复出厂 | `get` `save` `save_iccid` `save_nosim` `factory_reset` `MAX_LIST` |
 | `sp_at.lua` | AT 风格命令解析（纯逻辑，无硬件依赖） | `parse(text, password)` `trim` |
-| `sp_auth.lua` | 号码归一化与白名单门禁（纯逻辑） | `normalize_number` `in_whitelist` `check` |
+| `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块） | `imei` `iccid` `registered` `csq` `model` `reboot` `LED_GPIO` `LED_ACTIVE_HIGH` |
+| `sp_led.lua` | 状态灯（开发板 NET 灯）：网络/初始化指示与短信到达三连闪 | `pattern_for` `blink` |
 | `sp_commands.lua` | 命令表、执行、应答文案、未初始化/授权门禁 | `handle(sender, text)` `CH_ALIAS` `CMDS` |
 | `sp_forward.lua` | 短信唯一入口：命令分流/转发分发/应答发送 | `on_sms`（内部）`sms.setNewSmsCb` 注册 |
 | `sp_channels.lua` | 通道注册表 + HTTP/表单/联网等待工具 | `register` `dispatch` `keys` `wait_net` `http_post_json` `format_text` |
@@ -21,7 +22,6 @@
 | `sp_chan_serverchan.lua` | Server酱（SendKey 或完整 URL，表单 POST） | 同上 |
 | `sp_sim_guard.lua` | 换卡 ICCID 比对复位、无卡开机计数复位、热插拔监听 | `check_iccid` `handle_no_sim_boot` `boot_task` |
 | `sp_net.lua` | IP_READY 追加公共 DNS、SNTP 周期对时 | `ntp_task`（内部） |
-| `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块） | `imei` `iccid` `csq` `model` `reboot` |
 
 测试（不烧录）：
 
@@ -53,6 +53,8 @@
   （秒级+Base64）；时间源依赖 `sp_net` 的 NTP 同步
 - **防环**：转发文本固定 `【SmsPigeon】` 前缀；约定不把本机号加白名单
   （`sp_forward.lua` 头注释）
+- **状态灯**：`sp_led` 的闪烁语义（快闪/心跳/常亮/三连闪）见模块头注释与
+  README「状态灯指示」；引脚与极性是板级事实，定义在 `sp_platform`
 - **应答文案**：全部集中在 `sp_commands.lua` 各 `cmd_*` 函数返回值；
   改动需同步 `docs/commands.md` 与 HELP 输出
 
