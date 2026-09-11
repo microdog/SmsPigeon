@@ -15,7 +15,7 @@
 - 三重独立门禁：IMEI 初始化、白名单（默认开启）、密码前缀模式；
   多门禁同时开启时须全部满足
 - 转发通道：短信（离线可用）、钉钉 Webhook（加签）、飞书 Webhook（签名）、
-  Server酱（微信推送），插件式注册表可扩展
+  Server酱，插件式注册表可扩展
 - 防捡漏自毁：SIM 卡变更、连续第 3 次无卡开机自动恢复出厂
 - 纯 Lua 5.3 单元测试套件（含 LuatOS API 桩与 main.lua 装配冒烟），
   GitHub Actions CI（lua5.3 测试 + luacheck 静态检查）

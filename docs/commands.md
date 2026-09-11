@@ -111,7 +111,7 @@ ICCID:8986xxxxxxxxxxxxxxxx
  短信:开(1个目标)
  钉钉:开
  飞书:未配置
- 微信推送:未配置
+ Server酱:未配置
 ```
 
 ### 白名单管理
@@ -143,7 +143,7 @@ ICCID:8986xxxxxxxxxxxxxxxx
 
 `信鸽，转发` 查看所有通道状态。
 
-通道名：`短信`、`钉钉`、`飞书`、`微信推送`。
+通道名：`短信`、`钉钉`、`飞书`、`Server酱`。
 
 通用操作（`<通道>` 直接跟在动词后或用逗号隔开均可）：
 
@@ -181,12 +181,12 @@ ICCID:8986xxxxxxxxxxxxxxxx
 信鸽，设置飞书，https://open.feishu.cn/open-apis/bot/v2/hook/xxx，xxxxx
 ```
 
-#### 微信推送（Server酱）
+#### Server酱
 
 ```
-信鸽，设置微信推送，<SendKey或完整URL>
-信鸽，设置微信推送，SCTxxxxxxxx
-信鸽，设置微信推送，https://.../send/xxx.send
+信鸽，设置Server酱，<SendKey或完整URL>
+信鸽，设置Server酱，SCTxxxxxxxx
+信鸽，设置Server酱，https://.../send/xxx.send
 ```
 
 SendKey 在 [sct.ftqq.com](https://sct.ftqq.com/) 登录后获取；完整 URL

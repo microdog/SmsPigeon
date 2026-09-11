@@ -149,8 +149,8 @@ local PHRASES = {
     { "配置钉钉",     "DING_SET" },
     { "设置飞书",     "FS_SET" },
     { "配置飞书",     "FS_SET" },
-    { "设置微信推送", "SC_SET" },
-    { "配置微信推送", "SC_SET" },
+    { "设置Server酱", "SC_SET" },
+    { "配置Server酱", "SC_SET" },
     { "转发",         "FWD_READ" },
     -- 通用通道动词（free：通道名可直接拼接，且降序保证最后才尝试）
     { "开启",         "CH_ON",  true },

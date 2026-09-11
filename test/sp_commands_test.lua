@@ -214,12 +214,15 @@ eq(ding.on, true, "设置后自动开启")
 is_cmd, reply = send(ME, "信鸽，设置钉钉，ftp://bad")
 contains(reply, "ERROR", "非法URL报错")
 
-is_cmd, reply = send(ME, "信鸽，设置微信推送，SCT1234ABCD")
+is_cmd, reply = send(ME, "信鸽，设置Server酱，SCT1234ABCD")
 contains(reply, "OK", "配置Server酱SendKey")
 eq(sp_config.get().fwd.serverchan.sendkey, "SCT1234ABCD", "SendKey保存")
 
-is_cmd, reply = send(ME, "信鸽，设置微信推送，https://sc3.example.com/send/xxx.send")
+is_cmd, reply = send(ME, "信鸽，设置Server酱，https://sc3.example.com/send/xxx.send")
 contains(reply, "OK", "Server酱支持完整URL")
+
+is_cmd, reply = send(ME, "信鸽，关闭Server酱")
+contains(reply, "OK", "通用动词使用品牌名Server酱")
 
 is_cmd, reply = send(ME, "信鸽，设置飞书，https://open.feishu.cn/open-apis/bot/v2/hook/xxx")
 contains(reply, "OK", "配置飞书(免签)")

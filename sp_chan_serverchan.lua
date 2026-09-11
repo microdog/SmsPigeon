@@ -1,6 +1,6 @@
 --[[
 @module  sp_chan_serverchan
-@summary SmsPigeon 转发通道：Server酱（微信推送）
+@summary SmsPigeon 转发通道：Server酱
 @version 1.0
 @date    2026.09.11
 @usage
