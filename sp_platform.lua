@@ -94,20 +94,13 @@ local function ensure_sms_ready()
     return sms_ready
 end
 
---[[
-同步发送一条短信：就绪等待 + 提交 + SMS_SENT 结果等待与日志。
-返回 true 表示提交成功且未收到失败事件（SMS_SENT 超时视为成功：
-旧固件无此事件）；false 表示提交失败或收到明确失败事件。
-必须在任务上下文（sys.taskInit 内）调用。
-真实投递结果由 SMS_SENT 事件携带：result, rp_cause, rp_cause_str,
-msg_ref, error_code（error_code：0成功 331无网络/SIM未开通短信
-332网络超时 500未知 等，详见 docs.openluat.com/osapi/core/sms）
-]]
-function sp_platform.send_sms_sync(num, text)
-    if not (sms and sms.send) then
-        log.warn("sp_platform", "sms.send 不可用")
-        return false
-    end
+-- 发送互斥：短信 modem 同一时刻只允许一个在途发送。并发出栈
+-- （命令应答与远程发短信同时触发、转发与应答交叠）会撞上
+-- 内核 "sms is busy"，后者提交失败丢消息——真机实测曾丢命令应答。
+local send_lock = false
+
+-- 核心发送（调用方已持锁）
+local function core_send(num, text)
     ensure_sms_ready()
     if not sms.send(num, text) then
         log.warn("sp_platform", "短信提交失败 ->", num)
@@ -126,6 +119,33 @@ function sp_platform.send_sms_sync(num, text)
     end
     log.warn("sp_platform", "短信 ->", num, "结果超时,视为已提交")
     return true
+end
+
+--[[
+同步发送一条短信：就绪等待 + 提交 + SMS_SENT 结果等待与日志。
+返回 true 表示提交成功且未收到失败事件（SMS_SENT 超时视为成功：
+旧固件无此事件）；false 表示提交失败或收到明确失败事件。
+必须在任务上下文（sys.taskInit 内）调用；多个发送自动串行化
+（等待在途发送完成后才提交下一条）。
+真实投递结果由 SMS_SENT 事件携带：result, rp_cause, rp_cause_str,
+msg_ref, error_code（error_code：0成功 331无网络/SIM未开通短信
+332网络超时 500未知 等，详见 docs.openluat.com/osapi/core/sms）
+]]
+function sp_platform.send_sms_sync(num, text)
+    if not (sms and sms.send) then
+        log.warn("sp_platform", "sms.send 不可用")
+        return false
+    end
+    -- 串行化：等待在途发送完成（sys.wait 让出调度，20ms 重查）
+    while send_lock and sys and sys.wait do sys.wait(20) end
+    send_lock = true
+    local ok, res = pcall(core_send, num, text)
+    send_lock = false
+    if not ok then
+        log.warn("sp_platform", "短信发送异常 ->", num, tostring(res))
+        return false
+    end
+    return res
 end
 
 -- 异步发送一条短信（独立任务，不阻塞短信接收回调）：
