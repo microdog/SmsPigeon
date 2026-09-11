@@ -28,11 +28,14 @@ function ch.send(msg, chcfg)
     local text = string.format("【SmsPigeon】来自 %s:\n%s", msg.sender, msg.text)
     local failed = {}
     for _, target in ipairs(chcfg.targets) do
-        -- sms.send 同步返回值仅表示发送任务启动成功，
-        -- 最终结果通过 SMS_SEND_RESULT 事件异步通知（当前内核固件可选等待）
+        -- sms.send 同步返回值仅表示发送任务提交成功；
+        -- 真实发送结果由 V2018+ 内核的 SMS_SENT 事件携带（第二返回值）
         local ok = sms.send(target, text)
         if ok then
-            sys.waitUntil("SMS_SEND_RESULT", 5000)
+            local got, success = sys.waitUntil("SMS_SENT", 10000)
+            if got and not success then
+                failed[#failed + 1] = target
+            end
         else
             failed[#failed + 1] = target
         end

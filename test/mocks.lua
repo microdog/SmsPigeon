@@ -52,7 +52,7 @@ function M.install(opts)
         -- 需要驱动任务的测试按增量执行 MOCKS.tasks
         taskInit    = function(fn) MOCKS.tasks[#MOCKS.tasks + 1] = fn end,
         wait        = function() end,
-        waitUntil   = function() return true end,
+        waitUntil   = function() return true, true end,
         subscribe   = function() end,
         unsubscribe = function() end,
         timerStart  = function() end,

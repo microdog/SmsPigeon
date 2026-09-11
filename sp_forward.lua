@@ -24,9 +24,6 @@ local sp_platform = require "sp_platform"
 
 local sp_forward = {}
 
--- 短信收发是否就绪（就绪后缓存，避免重复等待）
-local sms_ready = false
-
 -- 等待短信收发就绪：优先等 SMS_READY（新内核固件），超时回退 CC_IND
 local function ensure_sms_ready()
     if sms_ready then return true end
@@ -45,7 +42,14 @@ local function send_sms_async(num, text)
     sys.taskInit(function()
         ensure_sms_ready()
         local ok = sms.send(num, text)
-        log.info("sp_forward", "应答短信 ->", num, ok and "已提交" or "发送失败")
+        if ok then
+            -- V2018+ 内核：SMS_SENT 事件携带真实发送结果（第二返回值）
+            local got, success = sys.waitUntil("SMS_SENT", 10000)
+            log.info("sp_forward", "应答短信 ->", num,
+                got and (success and "发送成功" or "发送失败") or "结果超时")
+        else
+            log.warn("sp_forward", "应答短信提交失败 ->", num)
+        end
     end)
 end
 
