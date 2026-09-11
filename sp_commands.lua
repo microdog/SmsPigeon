@@ -18,8 +18,8 @@
   信鸽，转发                  查看转发通道
   信鸽，增加转发号码，<号码> / 删除转发号码，<号码>
   信鸽，开启<通道> / 关闭<通道> / 清空<通道>（通道：短信/钉钉/飞书/Server酱）
-  信鸽，设置钉钉，<webhook>[，<加签密钥>]
-  信鸽，设置飞书，<webhook>[，<签名密钥>]
+  信鸽，设置钉钉，<webhook或token>[，<加签密钥>]
+  信鸽，设置飞书，<webhook或hook>[，<签名密钥>]
   信鸽，设置Server酱，<SendKey或URL>
   信鸽，恢复出厂
   信鸽，重启
@@ -306,13 +306,31 @@ local function cmd_ch_clr(cfg, args, sender)
     return "OK:" .. ch.name .. "配置已清空"
 end
 
--- 钉钉/飞书：设置<通道>，<webhook>[，<密钥>]
+-- 钉钉/飞书：设置<通道>，<webhook或token>[，<密钥>]
+-- webhook 完整 URL 带 http://、access_token= 等特征，易被运营商内容
+-- 过滤拦截；纯 token 形式（钉钉=access_token 的值，飞书=URL 末段
+-- hook id）只含字母数字横线，由固件拼出标准 webhook 地址
+local WEBHOOK_BASE = {
+    dingtalk = "https://oapi.dingtalk.com/robot/send?access_token=",
+    feishu   = "https://open.feishu.cn/open-apis/bot/v2/hook/",
+}
+
 local function make_web_set(key)
     return function(cfg, args, sender)
         local ch = sp_channels.get(key)
         local url, secret = args[1], args[2] or ""
-        if not url_valid(url) then
-            return "ERROR:Webhook 地址无效(需 http(s):// 开头,不含逗号)"
+        if not url or url == "" then
+            return "ERROR:缺少 webhook 或 token"
+        end
+        if url:sub(1, 7):lower() ~= "http://" and url:sub(1, 8):lower() ~= "https://" then
+            -- 纯 token 形式：仅字母数字横线，最短 16 位，拼标准地址
+            if not url:match("^[%w%-]+$") or #url < 16 then
+                return "ERROR:webhook 或 token 无效(token为URL末段,仅含字母数字横线)"
+            end
+            url = WEBHOOK_BASE[key] .. url
+        end
+        if url:find(",", 1, true) then
+            return "ERROR:地址不可包含逗号"
         end
         if secret:find(" ", 1, true) then return "ERROR:密钥不可含空格" end
         local chcfg = cfg.fwd[key]
@@ -388,8 +406,8 @@ CMDS = {
     { cmd = "CH_ON",      usage = "信鸽，开启<通道>",            run = cmd_ch_on },
     { cmd = "CH_OFF",     usage = "信鸽，关闭<通道>",            run = cmd_ch_off },
     { cmd = "CH_CLR",     usage = "信鸽，清空<通道>",            run = cmd_ch_clr },
-    { cmd = "DING_SET",   usage = "信鸽，设置钉钉，<webhook>[，<加签密钥>]", run = make_web_set("dingtalk") },
-    { cmd = "FS_SET",     usage = "信鸽，设置飞书，<webhook>[，<签名密钥>]", run = make_web_set("feishu") },
+    { cmd = "DING_SET",   usage = "信鸽，设置钉钉，<webhook或token>[，<加签密钥>]", run = make_web_set("dingtalk") },
+    { cmd = "FS_SET",     usage = "信鸽，设置飞书，<webhook或hook>[，<签名密钥>]", run = make_web_set("feishu") },
     { cmd = "SC_SET",     usage = "信鸽，设置Server酱，<SendKey>", run = cmd_sc_set },
     { cmd = "RESET",      usage = "信鸽，恢复出厂",             run = cmd_reset },
     { cmd = "REBOOT",     usage = "信鸽，重启",                 run = cmd_reboot },

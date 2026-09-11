@@ -224,6 +224,27 @@ contains(reply, "OK", "Server酱支持完整URL")
 is_cmd, reply = send(ME, "信鸽，关闭Server酱")
 contains(reply, "OK", "通用动词使用品牌名Server酱")
 
+
+-- 纯 token 配置：规避运营商对 URL 特征短信的过滤
+is_cmd, reply = send(ME, "信鸽，清空钉钉")
+contains(reply, "OK", "清空钉钉以便重配")
+is_cmd, reply = send(ME, "信鸽，设置钉钉，03f4753ec6aa6f0524fb85907c94b17f3fa0fed3107d4e8f4eee1d4a97855f4d，SECxxx")
+contains(reply, "OK", "纯token配置钉钉")
+eq(sp_config.get().fwd.dingtalk.url,
+   "https://oapi.dingtalk.com/robot/send?access_token=03f4753ec6aa6f0524fb85907c94b17f3fa0fed3107d4e8f4eee1d4a97855f4d",
+   "纯token拼出标准webhook地址")
+eq(sp_config.get().fwd.dingtalk.secret, "SECxxx", "token形式同样支持加签密钥")
+
+is_cmd, reply = send(ME, "信鸽，设置飞书，bb089165-4b73-4f80-9ed0-da0c908b44e5")
+contains(reply, "OK", "纯hook_id配置飞书")
+eq(sp_config.get().fwd.feishu.url,
+   "https://open.feishu.cn/open-apis/bot/v2/hook/bb089165-4b73-4f80-9ed0-da0c908b44e5",
+   "hook_id拼出标准webhook地址")
+
+is_cmd, reply = send(ME, "信鸽，设置钉钉，短token")
+contains(reply, "ERROR", "过短token报错")
+is_cmd, reply = send(ME, "信鸽，设置飞书，带空格的 token")
+contains(reply, "ERROR", "含空格token报错")
 is_cmd, reply = send(ME, "信鸽，设置飞书，https://open.feishu.cn/open-apis/bot/v2/hook/xxx")
 contains(reply, "OK", "配置飞书(免签)")
 

@@ -166,20 +166,31 @@ ICCID:8986xxxxxxxxxxxxxxxx
 #### 钉钉（群机器人 Webhook）
 
 ```
-信鸽，设置钉钉，<webhook地址>[，<加签密钥>]
+信鸽，设置钉钉，<webhook或token>[，<加签密钥>]
+信鸽，设置钉钉，03f4753e…a97855f4d，SECxxxxx      ← 纯 token 形式（推荐）
 信鸽，设置钉钉，https://oapi.dingtalk.com/robot/send?access_token=xxx，SECxxxxx
 ```
 
-- webhook：钉钉群 → 群设置 → 机器人 → 添加"自定义"机器人；
+- 机器人创建：钉钉群 → 群设置 → 机器人 → 添加"自定义"机器人；
 - 加签密钥：机器人安全设置选"加签"时生成（SEC 开头）；用"自定义关键词"
   安全设置时省略密钥（建议关键词填"短信"）。
+- **纯 token 形式**：webhook 完整 URL 带 `http://`、`access_token=` 等
+  特征，可能被运营商内容过滤拦截；token 取 webhook 地址中
+  `access_token=` 后面的那串字符，只含字母数字，固件自动拼出标准地址。
 
 #### 飞书（群机器人 Webhook）
 
 ```
-信鸽，设置飞书，<webhook地址>[，<签名密钥>]
+信鸽，设置飞书，<webhook或hook id>[，<签名密钥>]
+信鸽，设置飞书，bb089165-4b73-4f80-9ed0-da0c908b44e5      ← 纯 hook id 形式（推荐）
 信鸽，设置飞书，https://open.feishu.cn/open-apis/bot/v2/hook/xxx，xxxxx
 ```
+
+- 机器人创建：飞书群 → 设置 → 群机器人 → 添加"自定义机器人"；
+- 签名密钥：机器人安全设置选"签名校验"时填写，未开启则省略；
+- **纯 hook id 形式**：取 webhook 地址最后一段（`/hook/` 后面的部分，
+  如 `bb089165-4b73-4f80-9ed0-da0c908b44e5`），规避 URL 过滤，
+  固件自动拼出标准地址。
 
 #### Server酱
 
