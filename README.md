@@ -1,6 +1,6 @@
 # SmsPigeon 短信鸽
 
-基于 [Air780EHV](https://docs.openluat.com/air780ehv/product/) + [LuatOS](https://docs.openluat.com/osapi/) 的短信转发固件：把收到的短信转发到你的手机、钉钉、飞书或微信（Server酱）。
+基于 [Air780EHV](https://docs.openluat.com/air780ehv/product/) + [LuatOS](https://docs.openluat.com/osapi/) 的短信转发固件：把收到的短信转发到你的手机、钉钉、飞书、Server酱或企业微信。
 
 **全本地运行**是本项目的核心特性：配置、鉴权、控制全部通过短信完成，固件自身不连接任何远程管理 API——短信内容不经过第三方管理服务，配置只存在模块本地，最大程度保证隐私与安全。
 
@@ -91,11 +91,13 @@
    任意发件人 ──SMS──▶│ sp_forward 收到短信                 │
                     └──────┬─────────────────────────────┘
                            │
-              是命令(信鸽/密码前缀)？──否──▶ 转发分发 sp_channels
-                           │                    │
-                           ▼                    ├─▶ 短信通道（离线）
-                  sp_commands 命令处理           ├─▶ 钉钉 Webhook
-                  （鉴权→执行→短信应答）          ├─▶ 飞书 Webhook
+              是命令(信鸽/密码前缀)？──否──▶ 过滤：黑名单/过滤词
+                           │                    │ 命中即静默丢弃(计数)
+                           ▼                    ▼ 未命中
+                  sp_commands 命令处理        转发分发 sp_channels
+                  （鉴权→执行→短信应答）          ├─▶ 短信通道（离线）
+                                                ├─▶ 钉钉 Webhook
+                                                ├─▶ 飞书 Webhook
                                                 ├─▶ Server酱
                                                 └─▶ 企业微信（消息推送）
 ```
@@ -103,6 +105,10 @@
 - 未初始化：不转发任何短信，只接受 `信鸽，初始化`，其余静默丢弃；
 - 命令与转发互斥：一条短信要么是命令，要么被转发；
 - 换卡 / 连续 3 次无卡开机 → 恢复出厂，回到未初始化状态。
+- 来电提醒（`sp_call`）与心跳（`sp_heartbeat`）汇入同一转发队列，与短信
+  共用通道与限速；
+- 全部通道失败的转发暂存，网络恢复自动重发；连续 30 分钟无网络注册
+  自动重启自愈。
 
 ## 项目结构
 
@@ -112,21 +118,22 @@ sp_config.lua             配置持久化（fskv）与恢复出厂
 sp_at.lua                 中文句子命令解析器+中文数字（纯逻辑）
 sp_auth.lua               鉴权状态机：初始化/白名单/密码（纯逻辑）
 sp_commands.lua           命令表与执行、应答文案
-sp_forward.lua            短信接收入口：命令分流 + 转发分发
+sp_forward.lua            短信接收入口：命令分流/过滤/统计/暂存重发 + 转发分发
+sp_call.lua               来电提醒：CC_IND 监听，来电号码入转发队列
+sp_heartbeat.lua          心跳报平安：按小时间隔布防，在线摘要入转发队列
 sp_channels.lua           转发通道注册表与 HTTP 工具
 sp_chan_sms.lua           通道：短信转发
 sp_chan_dingtalk.lua      通道：钉钉 Webhook（加签）
 sp_chan_feishu.lua        通道：飞书 Webhook（签名）
 sp_chan_serverchan.lua    通道：Server酱
-sp_chan_wecom.lua          通道：企业微信（消息推送）
+sp_chan_wecom.lua         通道：企业微信（消息推送）
 sp_sim_guard.lua          换卡检测 + 无卡开机计数 + 自动复位
-sp_net.lua                联网状态 + NTP 对时（Webhook 加签依赖）
+sp_net.lua                联网状态 + NTP 对时（Webhook 加签依赖）+ 断网自愈
 sp_platform.lua           平台适配层（硬件访问 + 短信发送出口）
 sp_led.lua                状态灯（整机开发板 NET 灯）
 test/                     单元测试（纯 Lua 5.3，含 LuatOS API 桩）
 docs/                     命令手册 / 代码地图 / agent 指南
 ```
-
 
 ## 状态灯指示（整机开发板）
 
@@ -157,7 +164,7 @@ lua5.3 test/run_tests.lua
 
 测试覆盖命令解析、鉴权门禁组合、配置持久化/恢复出厂、换卡与无卡复位、
 转发统计/过滤/暂存重发、心跳布防、断网自愈、main.lua 全链路装配冒烟
-（10 个测试文件 448 项断言）。HTTP 通道的真实推送与硬件行为（短信收发、
+（10 个测试文件 450 项断言）。HTTP 通道的真实推送与硬件行为（短信收发、
 SIM 事件时序、CC_IND 来电事件）无法在纯 Lua 环境模拟，以下硬件验收
 清单为准。
 
@@ -206,7 +213,6 @@ SIM 事件时序、CC_IND 来电事件）无法在纯 Lua 环境模拟，以下�
 其余 LuatOS API（sms/fskv/http/crypto）在 Air780E 系列上通用。
 移植 Air780EPM/EHM/EGH 等型号通常只需确认 fskv 分区可用、
 `rtos.bsp()` 返回值，必要时在 `sp_platform.lua` 内做适配。
-
 
 ## 常见问题
 
