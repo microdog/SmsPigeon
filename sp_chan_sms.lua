@@ -25,8 +25,10 @@ end
 
 function ch.send(msg, chcfg)
     -- 短信通道刻意压缩格式，节省短信条数（不含时间戳）；
-    -- msg.prefix 为用户自定义前缀，默认空（不带任何固定标识）
-    local text = string.format("%s来自 %s:\n%s", msg.prefix or "", msg.sender, msg.text)
+    -- msg.prefix 为用户自定义前缀，默认空（不带任何固定标识）；
+    -- msg.identity 为设备标识（"" 则不携带）
+    local ident = (msg.identity and msg.identity ~= "") and (" [设备:" .. msg.identity .. "]") or ""
+    local text = string.format("%s来自 %s%s:\n%s", msg.prefix or "", msg.sender, ident, msg.text)
     for _, target in ipairs(chcfg.targets) do
         -- sms.send 同步返回值仅表示发送任务提交成功；
         -- 真实结果由 SMS_SENT 事件携带（result/error_code 等）

@@ -12,7 +12,7 @@
   MOCKS.store   fskv 键值内存库
   MOCKS.sent    sms.send 发出的短信 {num=, text=} 列表
   MOCKS.reboots rtos.reboot 调用次数
-  MOCKS.mobile  {imei=, iccid=, csq=} mobile 桩返回值
+  MOCKS.mobile  {imei=, iccid=, csq=, number=} mobile 桩返回值
   MOCKS.sms_cb  sms.setNewSmsCb 注册的回调
 
 opts 可设置初始 imei/iccid/csq/version。
@@ -38,6 +38,7 @@ function M.install(opts)
             iccid = opts.iccid or "",
             csq   = opts.csq or 25,
             status = opts.status or 1,   -- 默认已注册（mobile.REGISTERED）
+            number = opts.number or "", -- 本机号码（MSISDN，物联网卡默认为空）
         },
     }
     fskv = {
@@ -73,6 +74,7 @@ function M.install(opts)
         imei  = function() return MOCKS.mobile.imei end,
         iccid = function() return MOCKS.mobile.iccid end,
         csq   = function() return MOCKS.mobile.csq end,
+        number = function() return MOCKS.mobile.number end,
         status = function() return MOCKS.mobile.status end,
         -- 与桩返回值配套的注册状态常量（仅测试环境语义）
         REGISTERED = 1,

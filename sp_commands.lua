@@ -16,6 +16,7 @@
   信鸽，增加白名单，<号码> / 删除白名单，<号码>
   信鸽，设置密码，<密码> / 清除密码
   信鸽，设置前缀，<前缀文本> / 清除前缀   转发消息自定义前缀（默认空）
+  信鸽，设置标识，<标识文本> / 关闭标识 / 清除标识   设备标识（默认自动取手机号尾4位）
   信鸽，转发                  查看转发通道
   信鸽，增加转发号码，<号码> / 删除转发号码，<号码>
   信鸽，开启<通道> / 关闭<通道> / 清空<通道>（通道：短信/钉钉/飞书/Server酱/企业微信）
@@ -112,6 +113,11 @@ local function cmd_st(cfg, args, sender)
         "白名单:" .. (cfg.wl_on and "开" or "关") .. string.format("(%d个)", #cfg.whitelist),
         "密码:" .. (cfg.password ~= "" and "已设置" or "未设置"),
         "前缀:" .. (cfg.prefix ~= "" and cfg.prefix or "无"),
+        "标识:" .. (function()
+            if cfg.identity == "" then return "关闭" end
+            local id = sp_commands.resolve_identity(cfg)
+            return id ~= "" and id or "无"
+        end)(),
         "通道:",
     }
     for _, key in ipairs(sp_channels.keys()) do
@@ -212,6 +218,10 @@ local function cmd_pw_set(cfg, args, sender)
         -- 密码即默认前缀等于把前缀公开，禁止
         return "ERROR:密码不可为信鸽或AT"
     end
+    if cfg.prefix ~= "" and cfg.prefix:sub(1, #pwd) == pwd then
+        -- 已有转发前缀与密码同头：转发内容会构成命令形式
+        return "ERROR:密码与已设置的转发前缀同头,请先更换前缀"
+    end
     cfg.password = pwd
     sp_config.save()
     return "OK:密码已设置,此后命令以密码开头,如 " .. pwd .. "，状态"
@@ -224,6 +234,65 @@ local function cmd_pw_clr(cfg, args, sender)
         return "OK:密码已清除\n警告:白名单已关闭且未设密码,任何人均可控制本机"
     end
     return "OK:密码已清除,命令恢复默认前缀 信鸽"
+end
+
+--------------------------------------------------------------------------
+-- 设备标识（多设备转发到同一群时区分来源）
+-- cfg.identity 三态：nil=自动(手机号尾4位，取不到则不带)，""=关闭，文本=自定义
+--------------------------------------------------------------------------
+
+-- 解析出实际携带的标识文本；返回 "" 表示转发时不携带
+function sp_commands.resolve_identity(cfg)
+    local ident = cfg.identity
+    if ident == nil then
+        local num = sp_platform.msisdn()
+        if num:match("^%d+$") and #num >= 7 then
+            return num:sub(-4)
+        end
+        return ""
+    elseif ident == "" then
+        return ""
+    end
+    return ident
+end
+
+local function cmd_ident_read(cfg, args, sender)
+    if cfg.identity == nil then
+        local num = sp_platform.msisdn()
+        if num:match("^%d+$") and #num >= 7 then
+            return "OK:标识:自动(手机号尾号" .. num:sub(-4) .. ")"
+        end
+        return "OK:标识:自动(SIM未写号码,当前不携带)"
+    elseif cfg.identity == "" then
+        return "OK:标识:关闭"
+    end
+    return "OK:标识:" .. cfg.identity .. "(自定义)"
+end
+
+local function cmd_ident_set(cfg, args, sender)
+    local ident = table.concat(args, "，")
+    if ident == "" then
+        return "ERROR:用法 信鸽，设置标识，<标识文本>"
+    end
+    local len = (utf8 and utf8.len(ident)) or #ident
+    if not len or len > 16 then
+        return "ERROR:标识过长(上限16个字符)"
+    end
+    cfg.identity = ident
+    sp_config.save()
+    return "OK:设备标识已设置:" .. ident
+end
+
+local function cmd_ident_off(cfg, args, sender)
+    cfg.identity = ""
+    sp_config.save()
+    return "OK:转发不再携带设备标识"
+end
+
+local function cmd_ident_auto(cfg, args, sender)
+    cfg.identity = nil
+    sp_config.save()
+    return "OK:标识已恢复自动(手机号尾4位,取不到则不携带)"
 end
 
 --------------------------------------------------------------------------
@@ -247,6 +316,10 @@ local function cmd_prefix_set(cfg, args, sender)
     if pfx:sub(1, 6) == "信鸽" or pfx:sub(1, 3) == "鸽" then
         -- 前缀若为命令形式，转发出的短信会被误判为命令
         return "ERROR:前缀不可为信鸽等命令形式"
+    end
+    if cfg.password ~= "" and pfx:sub(1, #cfg.password) == cfg.password then
+        -- 密码模式下命令以密码开头，前缀与密码同头会构成命令形式
+        return "ERROR:前缀不可与密码同头(防转发内容被解析为命令)"
     end
     cfg.prefix = pfx
     sp_config.save()
@@ -458,6 +531,10 @@ CMDS = {
     { cmd = "PREFIX_READ", usage = "信鸽，前缀",                 run = cmd_prefix_read },
     { cmd = "PREFIX_SET",  usage = "信鸽，设置前缀，<前缀文本>", run = cmd_prefix_set },
     { cmd = "PREFIX_CLR",  usage = "信鸽，清除前缀",             run = cmd_prefix_clr },
+    { cmd = "IDENT_READ", usage = "信鸽，标识",                 run = cmd_ident_read },
+    { cmd = "IDENT_SET",  usage = "信鸽，设置标识，<标识文本>", run = cmd_ident_set },
+    { cmd = "IDENT_OFF",  usage = "信鸽，关闭标识",             run = cmd_ident_off },
+    { cmd = "IDENT_AUTO", usage = "信鸽，清除标识",             run = cmd_ident_auto },
     { cmd = "FWD_READ",   usage = "信鸽，转发",                 run = cmd_fwd_read },
     { cmd = "FWD_SMS_ADD", usage = "信鸽，增加转发号码，<号码>", run = cmd_fwd_sms_add },
     { cmd = "FWD_SMS_DEL", usage = "信鸽，删除转发号码，<号码>", run = cmd_fwd_sms_del },

@@ -131,6 +131,7 @@ local function on_sms(num, txt, metas)
             text = txt,
             time = os.date("%Y-%m-%d %H:%M:%S"),
             prefix = cfg.prefix or "",   -- 用户自定义转发前缀，默认空
+            identity = sp_commands.resolve_identity(cfg), -- 设备标识（自动/自定义/关闭）
         }, cfg.fwd)
     end)
 end

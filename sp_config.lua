@@ -23,11 +23,12 @@ local KEY_WL_ON = "sp_wl_on"   -- 白名单开关
 local KEY_WL    = "sp_wl"      -- 白名单号码列表(table)
 local KEY_PW    = "sp_pw"      -- 短信命令密码，"" 表示密码模式关闭
 local KEY_PFX   = "sp_pfx"     -- 转发消息前缀，"" 表示不带前缀
+local KEY_IDENT = "sp_ident"   -- 设备标识：键不存在=自动(手机号尾4位)，""=关闭，文本=自定义
 local KEY_FWD   = "sp_fwd"     -- 各转发通道配置(table)
 local KEY_ICCID = "sp_iccid"   -- 最近一次绑定的 SIM 卡 ICCID(复位判定用)
 local KEY_NOSIM = "sp_nosim"   -- 连续无卡开机计数
 
-local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_FWD, KEY_ICCID, KEY_NOSIM }
+local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_IDENT, KEY_FWD, KEY_ICCID, KEY_NOSIM }
 
 -- 配置缓存（由 init() 填充）
 local cache = nil
@@ -53,6 +54,8 @@ function sp_config.defaults()
         whitelist = {},                                   -- { "13800138000", ... }，存储归一化后的号码
         password = "",
         prefix = "",                                      -- 转发消息前缀（含【】等由用户自定）
+        -- 设备标识三态：nil=自动(手机号尾4位，取不到则不带)，""=关闭，文本=自定义
+        identity = nil,
         fwd = {
             sms        = { on = false, targets = {} },    -- 短信转发目标列表
             dingtalk   = { on = false, url = "", secret = "" },
@@ -89,6 +92,11 @@ local function load_cfg()
 
     v = fskv.get(KEY_PFX)
     if type(v) == "string" then cfg.prefix = v end
+
+    -- 标识：键不存在(nil)保持自动态；""=关闭；文本=自定义
+    v = fskv.get(KEY_IDENT)
+    if v == nil then cfg.identity = nil
+    elseif type(v) == "string" then cfg.identity = v end
 
     v = fskv.get(KEY_FWD)
     if type(v) == "table" then
@@ -133,6 +141,11 @@ function sp_config.save()
     fskv.set(KEY_WL, c.whitelist)
     fskv.set(KEY_PW, c.password)
     fskv.set(KEY_PFX, c.prefix)
+    if c.identity == nil then
+        fskv.del(KEY_IDENT)   -- 自动态：键不存在
+    else
+        fskv.set(KEY_IDENT, c.identity)
+    end
     fskv.set(KEY_FWD, c.fwd)
 end
 

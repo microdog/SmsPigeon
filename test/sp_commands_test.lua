@@ -294,6 +294,52 @@ contains(reply, "ERROR", "前缀不可为命令形式")
 is_cmd, reply = send(ME, "信鸽，状态")
 contains(reply, "前缀:【短信鸽】", "状态显示前缀")
 
+-- 设备标识：自动（mock 手机号可解析）
+MOCKS.mobile.number = "18019014417"
+is_cmd, reply = send(ME, "信鸽，标识")
+contains(reply, "尾号4417", "自动标识取手机号尾4位")
+eq(sp_commands.resolve_identity(sp_config.get()), "4417", "resolve_identity 自动解析")
+is_cmd, reply = send(ME, "信鸽，状态")
+contains(reply, "标识:4417", "状态显示自动标识")
+
+-- SIM 未写号码：自动态不携带
+MOCKS.mobile.number = ""
+is_cmd, reply = send(ME, "信鸽，标识")
+contains(reply, "SIM未写号码", "无号码时自动态提示")
+eq(sp_commands.resolve_identity(sp_config.get()), "", "无号码时解析为空")
+MOCKS.mobile.number = "18019014417"
+
+-- 自定义/关闭/恢复自动
+is_cmd, reply = send(ME, "信鸽，设置标识，客厅设备")
+contains(reply, "OK", "设置自定义标识")
+eq(sp_config.get().identity, "客厅设备", "标识已保存")
+is_cmd, reply = send(ME, "信鸽，标识")
+contains(reply, "客厅设备", "查询自定义标识")
+is_cmd, reply = send(ME, "信鸽，关闭标识")
+contains(reply, "OK", "关闭标识")
+eq(sp_config.get().identity, "", "关闭态保存为空串")
+eq(sp_commands.resolve_identity(sp_config.get()), "", "关闭态解析为空")
+is_cmd, reply = send(ME, "信鸽，清除标识")
+contains(reply, "OK", "清除标识恢复自动")
+eq(sp_config.get().identity, nil, "恢复自动态")
+
+-- 前缀与密码防冲突（advisory：密码模式下命令以密码开头）
+is_cmd, reply = send(ME, "信鸽，设置密码，8888ab")
+contains(reply, "OK", "设置密码")
+is_cmd, reply = send(ME, "8888ab，设置前缀，8888ab，来自")
+contains(reply, "ERROR", "前缀与密码同头被拒")
+is_cmd, reply = send(ME, "8888ab，设置前缀，【OK】")
+contains(reply, "OK", "正常前缀可设置")
+is_cmd, reply = send(ME, "8888ab，清除前缀")
+contains(reply, "OK", "清除前缀")
+-- 反向：先设前缀再设同头密码
+is_cmd, reply = send(ME, "8888ab，清除密码")
+contains(reply, "OK", "清除密码")
+send(ME, "信鸽，设置前缀，8888ab，来自")
+is_cmd, reply = send(ME, "信鸽，设置密码，8888ab")
+contains(reply, "ERROR", "密码与已有前缀同头被拒")
+send(ME, "信鸽，清除前缀")
+
 -- 前缀含逗号：参数拆分后用中文逗号拼回
 is_cmd, reply = send(ME, "信鸽，设置前缀，【短信，备份】")
 eq(sp_config.get().prefix, "【短信，备份】", "前缀中的逗号按原样保留")
@@ -320,6 +366,22 @@ sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-
 local out2 = MOCKS.sent[#MOCKS.sent]
 contains(out2.text, "【短信鸽】", "转发文本携带自定义前缀")
 send(ME, "信鸽，清除前缀")
+
+-- 分发携带设备标识：转发文本包含 [设备:xxx]
+local cfgx = sp_config.get()
+send(ME, "信鸽，设置标识，客厅")
+sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-11 10:00:00",
+    prefix = cfgx.prefix, identity = sp_commands.resolve_identity(cfgx) }, cfgx.fwd)
+local out3 = MOCKS.sent[#MOCKS.sent]
+contains(out3.text, "[设备:客厅]", "转发文本携带设备标识")
+send(ME, "信鸽，关闭标识")
+local cfgx = sp_config.get()
+sp_channels.dispatch({ sender = "10086", text = "余额:10元", time = "2026-09-11 10:00:00",
+    prefix = cfgx.prefix, identity = sp_commands.resolve_identity(cfgx) }, cfgx.fwd)
+local out4 = MOCKS.sent[#MOCKS.sent]
+assert(not out4.text:find("设备:", 1, true), "关闭标识后转发文本不携带")
+n = n + 1
+send(ME, "信鸽，清除标识")
 
 --------------------------------------------------------------------------
 -- 重启与恢复出厂

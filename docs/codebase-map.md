@@ -52,7 +52,8 @@
 - **适配新模组**：只改 `sp_platform.lua`；LuatOS API 在 Air780E 系列通用
 - **Webhook 加签**：`sp_chan_dingtalk`（毫秒+URL编码）/`sp_chan_feishu`
   （秒级+Base64）；时间源依赖 `sp_net` 的 NTP 同步
-- **防环与前缀**：转发文本默认无固定标识，前缀可配置（`信鸽，设置前缀`）；
+- **前缀/标识**：转发文本默认无固定标识，前缀与设备标识均可配置
+  （`信鸽，设置前缀` / `信鸽，设置标识`，标识自动取 MSISDN 尾 4 位）；
   安全性来自命令语法（转发内容不会被解析为命令），约定不把本机号加白名单
 - **状态灯**：`sp_led` 的闪烁语义（快闪/心跳/常亮/三连闪）见模块头注释与
   README「状态灯指示」；引脚与极性是板级事实，定义在 `sp_platform`
@@ -68,6 +69,7 @@
   whitelist   = { "138...", }  -- fskv: sp_wl（归一化号码，上限 10）
   password    = "",            -- fskv: sp_pw（""=密码模式关）
   prefix      = "",            -- fskv: sp_pfx（转发前缀，""=无前缀）
+  identity    = nil/string,    -- fskv: sp_ident（设备标识：nil=自动取手机号尾4位）
   fwd = {                      -- fskv: sp_fwd
     sms        = { on=bool, targets={...} },
     dingtalk   = { on=bool, url="", secret="" },

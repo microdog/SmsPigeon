@@ -128,6 +128,12 @@ local PHRASES = {
     { "白名单",       "WL_READ" },
     -- 转发前缀
     { "设置前缀",     "PREFIX_SET" },
+    -- 设备标识（多设备同群转发时区分来源）
+    { "设置标识",     "IDENT_SET" },
+    { "关闭标识",     "IDENT_OFF" },
+    { "清除标识",     "IDENT_AUTO" },
+    { "清空标识",     "IDENT_AUTO" },
+    { "标识",         "IDENT_READ" },
     { "清除前缀",     "PREFIX_CLR" },
     { "清空前缀",     "PREFIX_CLR" },
     { "前缀",         "PREFIX_READ" },

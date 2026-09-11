@@ -109,10 +109,12 @@ function sp_channels.form_encode(params)
 end
 
 -- 网络类通道统一的转发文本。msg.prefix 为用户自定义前缀（默认空串），
--- 不再内置任何固定标识，避免出栈短信携带可被运营商过滤的特征
+-- 不再内置任何固定标识，避免出栈短信携带可被运营商过滤的特征；
+-- msg.identity 为设备标识（多设备同群区分来源，"" 则不携带）
 function sp_channels.format_text(msg)
-    return string.format("%s收到来自 %s 的短信\n时间: %s\n\n%s",
-        msg.prefix or "", msg.sender, msg.time, msg.text)
+    local ident = (msg.identity and msg.identity ~= "") and (" [设备:" .. msg.identity .. "]") or ""
+    return string.format("%s收到来自 %s 的短信%s\n时间: %s\n\n%s",
+        msg.prefix or "", msg.sender, ident, msg.time, msg.text)
 end
 
 return sp_channels

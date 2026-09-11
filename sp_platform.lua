@@ -39,6 +39,17 @@ function sp_platform.iccid()
     return ""
 end
 
+-- 本机手机号 MSISDN（标识自动取尾号用），SIM 未写号码或未就绪返回 ""
+-- mobile.number(0) 在 SIM 就绪后返回卡内号码；物联网卡常不写 MSISDN，此时为空
+function sp_platform.msisdn()
+    if mobile and mobile.number then
+        local s = mobile.number(0)
+        if type(s) ~= "string" then return "" end
+        return (s:gsub("%s", ""))
+    end
+    return ""
+end
+
 -- 网络是否已注册（含漫游）
 function sp_platform.registered()
     if mobile and mobile.status and mobile.REGISTERED then
