@@ -80,4 +80,30 @@ MOCKS.sms_cb("10086", "余额:10元")
 base = run_new_tasks(base)
 eq(#MOCKS.sent, 4, "无通道配置时转发不产生短信")
 
+-- S3 防环：转发携带实例标记、回环短信被丢弃、本机号码目标被跳过
+local sp_config = require "sp_config"
+MOCKS.sms_cb("13800138000", "信鸽，增加转发号码，13911112222")
+base = run_new_tasks(base)
+MOCKS.sms_cb("13800138000", "信鸽，开启短信转发")
+base = run_new_tasks(base)
+local mark = sp_config.get().mark
+assert(type(mark) == "string" and #mark == 8, "防环实例标记已生成(8位hex)")
+MOCKS.sms_cb("10086", "余额:20元")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 7, "普通短信经短信通道转发(含两条命令应答)")
+local fwd = MOCKS.sent[#MOCKS.sent]
+eq(fwd.num, "13911112222", "转发发往配置目标")
+assert(fwd.text:find(mark, 1, true), "转发文本末尾携带防环标记")
+n = n + 2
+
+MOCKS.sms_cb("13911112222", "来自 10086:\n余额:20元\n" .. mark)
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 7, "含本机标记的回环短信被丢弃(不转发不回复)")
+
+MOCKS.mobile.number = "13911112222"   -- 目标==本机 MSISDN
+MOCKS.sms_cb("10086", "余额:30元")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 7, "等于本机号码的转发目标被跳过")
+MOCKS.mobile.number = ""
+
 print(string.format("PASS main_smoke_test (%d assertions)", n))

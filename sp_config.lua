@@ -26,8 +26,10 @@ local KEY_PFX   = "sp_pfx"     -- 转发消息前缀，"" 表示不带前缀
 local KEY_IDENT = "sp_ident"   -- 设备标识：键不存在=自动(手机号尾4位)，""=关闭，文本=自定义
 local KEY_FWD   = "sp_fwd"     -- 各转发通道配置(table)
 local KEY_ICCID = "sp_iccid"   -- 最近一次绑定的 SIM 卡 ICCID(复位判定用)
-local KEY_NOSIM = "sp_nosim"   -- 连续无卡开机计数
+local KEY_NOSIM = "sp_nosim" -- 连续无卡开机计数
+local KEY_MARK = "sp_mark"  -- 防环实例标记(随机hex,不随恢复出厂清除:无鉴权作用,清除反而留下无标记空窗)
 
+-- 恢复出厂时清除的键（sp_mark 刻意不在其中，见其注释）
 local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_IDENT, KEY_FWD, KEY_ICCID, KEY_NOSIM }
 
 -- 配置缓存（由 init() 填充）
@@ -63,6 +65,7 @@ function sp_config.defaults()
             serverchan = { on = false, sendkey = "" },
             wecom      = { on = false, key = "" },        -- 企业微信消息推送（原群机器人）
         },
+        mark = "",                                         -- 防环实例标记（内部字段，sp_forward 首启生成）
         iccid = "",                                       -- SIM 卡绑定信息（内部字段）
         nosim_cnt = 0,                                    -- 连续无卡开机计数（内部字段）
     }
@@ -110,6 +113,8 @@ local function load_cfg()
             end
         end
     end
+    v = fskv.get(KEY_MARK)
+    if type(v) == "string" and v ~= "" then cfg.mark = v end
 
     v = fskv.get(KEY_ICCID)
     if type(v) == "string" then cfg.iccid = v end
@@ -153,6 +158,12 @@ end
 function sp_config.save_iccid(iccid)
     cache.iccid = iccid
     fskv.set(KEY_ICCID, iccid)
+end
+
+-- 记录防环实例标记（sp_forward 首启生成后调用）
+function sp_config.save_mark(mark)
+    cache.mark = mark
+    fskv.set(KEY_MARK, mark)
 end
 
 -- 记录连续无卡开机计数

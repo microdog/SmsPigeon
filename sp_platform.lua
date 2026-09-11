@@ -60,6 +60,18 @@ function sp_platform.registered()
     return false
 end
 
+-- 随机 8 位十六进制串（转发防环实例标记）。
+-- 种子混入 IMEI 与开机 tick：保证跨设备/跨次开机取值不同
+function sp_platform.rand_hex8()
+    local seed = 0
+    local imei = (mobile and mobile.imei and mobile.imei()) or ""
+    for i = 1, #imei do seed = seed * 31 + imei:byte(i) end
+    if rtos and rtos.tick then seed = seed * 1000003 + rtos.tick() end
+    if seed == 0 then seed = os.clock() * 1000000 end
+    math.randomseed(seed)
+    return string.format("%08x", math.random(0, 0x7fffffff))
+end
+
 --------------------------------------------------------------------------
 -- 短信发送出口（系统 sms API 的唯一发送路径）
 --------------------------------------------------------------------------

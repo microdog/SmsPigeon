@@ -1,7 +1,7 @@
 --[[
 @module  sp_forward
 @summary SmsPigeon 转发引擎（短信入口：命令分流 + 消息转发）
-@version 1.2
+@version 1.3
 @date    2026.09.11
 @usage
 本模块注册短信接收回调，是所有收到短信的唯一入口：
@@ -13,10 +13,13 @@
    - 未初始化：直接丢弃（不转发）；
    - 已初始化：分发到所有已启用且配置完整的转发通道。
 
-防环说明：转发消息不内置任何固定标识（前缀可由用户自定义，默认空）。
-安全性来自命令语法本身——转发出去的内容不会以"信鸽+分隔符"开头，不会被
-再次解析为命令，因此不形成循环。请勿将本机号码加入白名单或转发列表，
-也勿把转发前缀设为"信鸽，"等命令形式。
+防环说明（代码级，两层）：
+1. 短信通道发送前跳过等于本机 MSISDN 的目标；
+2. 短信通道转发末尾追加本机实例标记（随机 8 位十六进制，首启生成并
+   持久化）；收到含本机标记的短信直接丢弃——自身回环与双机互转均
+   在一跳内断链。标记为纯随机串，无固定词、无跨设备特征，不构成
+   运营商可识别的指纹。命令语法层面转发内容也不会以"信鸽+分隔符"
+   开头被再解析为命令。
 
 短信收发就绪说明：SMS_READY/CC_IND 就绪广播的捕获与发送路径
 （就绪等待/提交/SMS_SENT 结果日志）统一封装在 sp_platform，
@@ -58,7 +61,13 @@ local function on_sms(num, txt, metas)
                 y, metas.mon or 0, metas.day or 0,
                 metas.hour or 0, metas.min or 0, metas.sec or 0, tzstr))
     end
-    sp_led.blink()   -- 状态灯三连闪提示短信到达
+    -- 防环：含本机实例标记 = 自己发出的转发回来了（自环/对端回环），丢弃
+    local mark = sp_config.get().mark or ""
+    if mark ~= "" and txt:find(mark, 1, true) then
+        log.warn("sp_forward", "丢弃回环短信(含本机标记)", num)
+        return
+    end
+     sp_led.blink()   -- 状态灯三连闪提示短信到达
     -- 1. 命令分流
     local is_cmd, reply, action = sp_commands.handle(num, txt)
     if is_cmd then
@@ -85,6 +94,7 @@ local function on_sms(num, txt, metas)
             time = os.date("%Y-%m-%d %H:%M:%S"),
             prefix = cfg.prefix or "",   -- 用户自定义转发前缀，默认空
             identity = sp_commands.resolve_identity(cfg), -- 设备标识（自动/自定义/关闭）
+            mark = cfg.mark or "",       -- 防环实例标记（短信通道附加）
         }, cfg.fwd)
     end)
 end
@@ -95,6 +105,18 @@ if sms and sms.setNewSmsCb then
 else
     log.warn("sp_forward", "sms.setNewSmsCb 不可用，改用 SMS_INC 消息监听")
     sys.subscribe("SMS_INC", on_sms)
+end
+
+-- 防环实例标记：首启生成随机 8 位十六进制并持久化（sp_mark 键）。
+-- 刻意不随恢复出厂清除：标记无鉴权作用，清除反而留下"转发无标记"
+-- 的空窗（复位后无需重启即可继续转发）
+do
+    local c = sp_config.get()
+    if c.mark == nil or c.mark == "" then
+        c.mark = sp_platform.rand_hex8()
+        sp_config.save_mark(c.mark)
+        log.info("sp_forward", "防环实例标记已生成")
+    end
 end
 
 return sp_forward
