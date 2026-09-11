@@ -35,8 +35,9 @@ SmsPigeon 是运行在 Air780EHV（LuatOS）上的短信转发固件：
    - `sp_platform.lua` 是唯一允许触碰 `mobile`/`rtos` 的模块；
    - 纯逻辑模块（`sp_at`/`sp_auth`/`sp_config`）不得引用任何硬件
      全局库（`sms`/`mobile`/`http`/`socket`），保持可单测；
-   - 收路径事件订阅例外：`sp_forward`（`sms` 收信）、`sp_call`
-     （`cc` 来电）在加载期直接订阅全局库回调，不走 `sp_platform`；
+   - 收路径事件订阅例外：`sp_forward`（`sms` 收信 + `IP_READY` 暂存
+     排空）、`sp_call`（`cc` 来电）、`sp_net`（`IP_READY`）在加载期
+     直接订阅全局库回调/定时器，不走 `sp_platform`；
    - 转发通道必须走 `sp_channels.register` 注册表接口。
 6. **配置落盘**：修改 `sp_config.get()` 返回的表后必须调用
    `sp_config.save()`；`RESET` 类命令不得留下未保存的内存残留。
