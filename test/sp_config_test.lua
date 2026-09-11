@@ -86,6 +86,13 @@ eq(cfg4.iccid, "", "复位后ICCID解绑")
 eq(cfg4.nosim_cnt, 0, "复位后计数清零")
 eq(MOCKS.store["sp_state"], nil, "复位后fskv键删除")
 
+-- L5：fskv 写失败时 save 返回 false（日志留线索）
+local real_set = fskv.set
+fskv.set = function() return false end
+eq(sp_config.save(), false, "写失败时save返回false")
+fskv.set = real_set
+eq(sp_config.save(), true, "写恢复正常后save返回true")
+
 -- 损坏数据容错：直接往 store 塞非法类型
 MOCKS.store["sp_wl"] = "not-a-table"
 MOCKS.store["sp_wl_on"] = "corrupt"

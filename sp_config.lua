@@ -138,38 +138,50 @@ function sp_config.get()
     return cache
 end
 
--- 将用户配置整体落盘（iccid/nosim_cnt 内部字段不在此处持久化）
+-- 带检查的写入：fskv.set 失败（如空间耗尽）时记警告——否则写失败
+-- 静默无线索，命令应答 OK 而重启后配置回退，无从排查
+local function kv_set(k, v)
+    if not (fskv and fskv.set) then return true end
+    if fskv.set(k, v) then return true end
+    log.warn("sp_config", "配置写入失败(重启后配置可能回退)", k)
+    return false
+end
+
+-- 将用户配置整体落盘（iccid/nosim_cnt 内部字段不在此处持久化）。
+-- 返回 false 表示至少一个键写入失败（内存配置仍生效至重启）
 function sp_config.save()
     local c = cache
-    fskv.set(KEY_STATE, c.initialized and "INIT" or "")
-    fskv.set(KEY_WL_ON, c.wl_on)
-    fskv.set(KEY_WL, c.whitelist)
-    fskv.set(KEY_PW, c.password)
-    fskv.set(KEY_PFX, c.prefix)
+    local ok = true
+    ok = kv_set(KEY_STATE, c.initialized and "INIT" or "") and ok
+    ok = kv_set(KEY_WL_ON, c.wl_on) and ok
+    ok = kv_set(KEY_WL, c.whitelist) and ok
+    ok = kv_set(KEY_PW, c.password) and ok
+    ok = kv_set(KEY_PFX, c.prefix) and ok
     if c.identity == nil then
         fskv.del(KEY_IDENT)   -- 自动态：键不存在
     else
-        fskv.set(KEY_IDENT, c.identity)
+        ok = kv_set(KEY_IDENT, c.identity) and ok
     end
-    fskv.set(KEY_FWD, c.fwd)
+    ok = kv_set(KEY_FWD, c.fwd) and ok
+    return ok
 end
 
 -- 记录当前绑定的 SIM 卡 ICCID
 function sp_config.save_iccid(iccid)
     cache.iccid = iccid
-    fskv.set(KEY_ICCID, iccid)
+    kv_set(KEY_ICCID, iccid)
 end
 
 -- 记录防环实例标记（sp_forward 首启生成后调用）
 function sp_config.save_mark(mark)
     cache.mark = mark
-    fskv.set(KEY_MARK, mark)
+    kv_set(KEY_MARK, mark)
 end
 
 -- 记录连续无卡开机计数
 function sp_config.save_nosim(cnt)
     cache.nosim_cnt = cnt
-    fskv.set(KEY_NOSIM, cnt)
+    kv_set(KEY_NOSIM, cnt)
 end
 
 -- 恢复出厂设置：删除全部 sp_ 键，回到未初始化状态
