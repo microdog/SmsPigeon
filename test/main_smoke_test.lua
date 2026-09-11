@@ -106,4 +106,15 @@ base = run_new_tasks(base)
 eq(#MOCKS.sent, 7, "等于本机号码的转发目标被跳过")
 MOCKS.mobile.number = ""
 
+local sp_forward = require "sp_forward"
+-- S4 队列：洪泛时上限 20、丢最旧计数；worker 一次驱动排空
+for i = 1, 25 do
+    MOCKS.sms_cb("10086", "洪水" .. i)
+end
+eq(sp_forward.stats().pending, 20, "队列封顶在20(丢最旧)")
+eq(sp_forward.stats().dropped, 5, "溢出丢弃计数=5")
+base = run_new_tasks(base)
+eq(sp_forward.stats().pending, 0, "worker 一次排空队列")
+eq(#MOCKS.sent, 27, "排空仅转发队列内的20条(7+20)")
+
 print(string.format("PASS main_smoke_test (%d assertions)", n))

@@ -1,7 +1,7 @@
 --[[
 @module  sp_forward
 @summary SmsPigeon 转发引擎（短信入口：命令分流 + 消息转发）
-@version 1.3
+@version 1.4
 @date    2026.09.11
 @usage
 本模块注册短信接收回调，是所有收到短信的唯一入口：
@@ -38,7 +38,7 @@ local log = log
 
 local sp_forward = {}
 
--- 短信入口（V2050+ 回调第三参数 metas 携带短信中心时间戳）
+local enqueue_forward   -- 前置声明：on_sms 在定义前引用（见下方队列节）
 local function on_sms(num, txt, metas)
     -- 只记号码与长度，不落正文：命令短信含密码/token，第三方短信
     -- 内容同样不应进日志（排障需要正文时临时发 信鸽，调试，开）
@@ -81,22 +81,61 @@ local function on_sms(num, txt, metas)
         return
     end
 
-    -- 2. 普通短信转发
+    -- 2. 普通短信转发：入有界队列，由单 worker 串行消费
     local cfg = sp_config.get()
     if not cfg.initialized then
         log.info("sp_forward", "固件未初始化，短信不转发")
         return
     end
-    sys.taskInit(function()
+    enqueue_forward(num, txt)
+end
+
+--------------------------------------------------------------------------
+-- 转发队列：单 worker + 有界 + 限速
+-- 逐条 taskInit 的做法在短信洪泛下无界堆积（HTTP 通道联网等待 15s、
+-- 短信通道串行 10s/条，任务驻留长），受限 RAM 会被耗尽；且每条入站
+-- 短信被放大为 N 个目标出站（本机话费）。队列溢出丢最旧并计数。
+--------------------------------------------------------------------------
+local QUEUE_MAX    = 20     -- 队列上限（溢出丢最旧）
+local FWD_INTERVAL = 2000   -- 两次转发之间的最小间隔（ms，限速）
+
+local queue = {}
+local dropped = 0
+local worker_running = false
+
+local function fwd_worker()
+    while #queue > 0 do
+        local m = table.remove(queue, 1)
+        local cfg = sp_config.get()
         sp_channels.dispatch({
-            sender = num,
-            text = txt,
-            time = os.date("%Y-%m-%d %H:%M:%S"),
+            sender = m.num,
+            text = m.txt,
+            time = m.time,
             prefix = cfg.prefix or "",   -- 用户自定义转发前缀，默认空
             identity = sp_commands.resolve_identity(cfg), -- 设备标识（自动/自定义/关闭）
             mark = cfg.mark or "",       -- 防环实例标记（短信通道附加）
         }, cfg.fwd)
-    end)
+        if #queue > 0 then sys.wait(FWD_INTERVAL) end
+    end
+    worker_running = false
+end
+
+enqueue_forward = function(num, txt)
+    queue[#queue + 1] = { num = num, txt = txt, time = os.date("%Y-%m-%d %H:%M:%S") }
+    if #queue > QUEUE_MAX then
+        table.remove(queue, 1)
+        dropped = dropped + 1
+        log.warn("sp_forward", "转发队列已满,丢弃最旧消息,累计丢弃", dropped)
+    end
+    if not worker_running and sys and sys.taskInit then
+        worker_running = true
+        sys.taskInit(fwd_worker)
+    end
+end
+
+-- 队列运行状态（排障/测试观测用）
+function sp_forward.stats()
+    return { pending = #queue, dropped = dropped }
 end
 
 -- 注册短信回调：优先 setNewSmsCb，不支持时退回系统消息
