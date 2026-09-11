@@ -31,6 +31,12 @@ local sp_led      = require "sp_led"
 
 local sp_forward = {}
 
+-- 开启内核短信调试日志（官方 sms.debug 开关）：
+-- 打印收发短信的 PDU 级细节，排查"短信是否到达模组"类问题必需
+if sms and sms.debug then
+    sms.debug(true)
+end
+
 -- 短信收发是否就绪（就绪后缓存，避免重复等待）
 local sms_ready = false
 
@@ -58,21 +64,39 @@ local function send_sms_async(num, text)
         ensure_sms_ready()
         local ok = sms.send(num, text)
         if ok then
-            -- V2018+ 内核：SMS_SENT 事件携带真实发送结果（第二返回值）
-            local got, success = sys.waitUntil("SMS_SENT", 10000)
-            log.info("sp_forward", "应答短信 ->", num,
-                got and (success and "发送成功" or "发送失败") or "结果超时")
+            -- SMS_SENT 事件携带完整提交结果：result, rp_cause, rp_cause_str,
+            -- msg_ref, error_code（error_code：0成功 331无网络/SIM未开通短信
+            -- 332网络超时 500未知 等，详见 docs.openluat.com/osapi/core/sms）
+            local got, result, _, rp_cause_str, _, error_code =
+                sys.waitUntil("SMS_SENT", 10000)
+            if got and result then
+                log.info("sp_forward", "应答短信 ->", num, "发送成功")
+            elseif got then
+                log.warn("sp_forward", "应答短信 ->", num, "发送失败",
+                    "error_code=" .. tostring(error_code),
+                    tostring(rp_cause_str))
+            else
+                log.warn("sp_forward", "应答短信 ->", num, "结果超时")
+            end
         else
             log.warn("sp_forward", "应答短信提交失败 ->", num)
         end
     end)
 end
 
--- 短信入口
-local function on_sms(num, txt)
+-- 短信入口（V2050+ 回调第三参数 metas 携带短信中心时间戳）
+local function on_sms(num, txt, metas)
+    -- 无条件打印每条收到的短信（内容+号码），先于任何鉴权/分流
     log.info("sp_forward", "收到短信", num, txt)
+    if type(metas) == "table" then
+        -- SCTS：短信中心下发时间。若与你发送时刻相差很大，
+        -- 说明短信在运营商侧滞留/延迟投递，不是固件问题
+        log.info("sp_forward", "短信中心时间戳",
+            string.format("%04d-%02d-%02d %02d:%02d:%02d",
+                metas.year or 0, metas.mon or 0, metas.day or 0,
+                metas.hour or 0, metas.min or 0, metas.sec or 0))
+    end
     sp_led.blink()   -- 状态灯三连闪提示短信到达
-
     -- 1. 命令分流
     local is_cmd, reply, action = sp_commands.handle(num, txt)
     if is_cmd then

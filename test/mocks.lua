@@ -94,6 +94,7 @@ function M.install(opts)
             return true
         end,
         setNewSmsCb = function(fn) MOCKS.sms_cb = fn end,
+        debug = function(enable) MOCKS.sms_debug = enable end,
     }
 
     http = { request = function() error("http mock: 单元测试未实现 HTTP") end }

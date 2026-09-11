@@ -29,11 +29,15 @@ function ch.send(msg, chcfg)
     local failed = {}
     for _, target in ipairs(chcfg.targets) do
         -- sms.send 同步返回值仅表示发送任务提交成功；
-        -- 真实发送结果由 V2018+ 内核的 SMS_SENT 事件携带（第二返回值）
+        -- 真实结果由 SMS_SENT 事件携带（result/error_code 等）
         local ok = sms.send(target, text)
         if ok then
-            local got, success = sys.waitUntil("SMS_SENT", 10000)
-            if got and not success then
+            -- SMS_SENT 携带真实提交结果（超时视为成功：旧固件无此事件）
+            local got, result, _, rp_cause_str, _, error_code =
+                sys.waitUntil("SMS_SENT", 10000)
+            if got and not result then
+                log.warn("sp_chan_sms", "转发失败", target,
+                    "error_code=" .. tostring(error_code), tostring(rp_cause_str))
                 failed[#failed + 1] = target
             end
         else

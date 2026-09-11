@@ -38,6 +38,7 @@ eq(sp_led.pattern_for(false, true), "fast", "状态灯:未注册已初始化仍�
 eq(sp_led.pattern_for(true, false), "slow", "状态灯:未初始化心跳")
 eq(sp_led.pattern_for(true, true), "on", "状态灯:正常常亮")
 sp_led.blink()   -- 活动闪烁接口，即便未驱动任务也应无害
+eq(MOCKS.sms_debug, true, "内核短信调试日志已开启(sms.debug)")
 
 -- 未初始化：命令无应答、普通短信不转发
 local base = #MOCKS.tasks
