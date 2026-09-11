@@ -171,6 +171,7 @@ eq(sp_config.get().wl_on, true, "补号码后可正常开启")
 
 is_cmd, reply = send(ME, "信鸽，设置密码，8888")
 contains(reply, "OK", "设置密码")
+assert(not tostring(reply):find("8888", 1, true), "设置密码应答不回显明文(L7)")
 eq(sp_config.get().password, "8888", "密码已保存")
 
 is_cmd, reply = send(ME, "信鸽，状态")

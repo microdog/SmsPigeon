@@ -231,7 +231,8 @@ local function cmd_pw_set(cfg, args, sender)
     end
     cfg.password = pwd
     sp_config.save()
-    return "OK:密码已设置,此后命令以密码开头,如 " .. pwd .. "，状态"
+    -- 应答不回显密码：明文会留存于手机短信历史并随云备份同步
+    return "OK:密码已设置,此后命令以密码开头(如 密码，状态)"
 end
 
 local function cmd_pw_clr(cfg, args, sender)
