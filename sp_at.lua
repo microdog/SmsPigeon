@@ -1,7 +1,7 @@
 --[[
 @module  sp_at
 @summary SmsPigeon 中文句子命令解析器（纯逻辑，零硬件依赖）
-@version 2.0
+@version 2.1
 @date    2026.09.11
 @usage
 把短信文本解析为结构化中文命令。前缀为"信鸽"，命令体为自然中文短语：
@@ -164,6 +164,10 @@ local PHRASES = {
     { "删除转发号码",     "FWD_SMS_DEL" },
     { "移除转发号码",     "FWD_SMS_DEL" },
     { "删除转发目标",     "FWD_SMS_DEL" },
+    -- 来电提醒（长短语优先于通用动词"开启/关闭"，避免误入通道开关）
+    { "开启来电提醒",     "CALLN_ON" },
+    { "关闭来电提醒",     "CALLN_OFF" },
+    { "来电提醒",         "CALLN_READ" },
     -- 通道配置
     { "查看转发",     "FWD_READ" },
     { "转发状态",     "FWD_READ" },

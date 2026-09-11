@@ -1,7 +1,7 @@
 --[[
 @module  main
 @summary SmsPigeon 固件入口（LuatOS 用户应用脚本）
-@version 1.0.0
+@version 1.1.0
 @date    2026.09.11
 @usage
 SmsPigeon（短信鸽）：全本地运行的 Air780EHV 短信转发固件。
@@ -18,6 +18,7 @@ SmsPigeon（短信鸽）：全本地运行的 Air780EHV 短信转发固件。
   sp_chan_serverchan  Server酱
   sp_commands         短信命令处理
   sp_forward          短信入口（命令分流 + 转发分发）
+  sp_call             来电提醒（CC_IND 监听 → 转发队列）
   sp_sim_guard        SIM 卡守护（换卡/连续无卡开机复位）
 
 快速上手：
@@ -30,7 +31,7 @@ SmsPigeon（短信鸽）：全本地运行的 Air780EHV 短信转发固件。
 
 -- Luatools 工具与远程升级依赖的项目级全局变量
 PROJECT = "SmsPigeon"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 local sys = require "sys"
 log.info("main", PROJECT, VERSION)
@@ -52,6 +53,7 @@ require "sp_chan_wecom"         -- 企业微信通道
 
 require "sp_commands"           -- 短信命令处理
 require "sp_forward"            -- 短信入口（命令 + 转发）
+require "sp_call"               -- 来电提醒
 require "sp_sim_guard"          -- SIM 卡守护
 require "sp_led"                -- 状态灯（整机开发板 NET 灯）
 

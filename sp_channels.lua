@@ -125,6 +125,11 @@ end
 -- msg.identity 为设备标识（多设备同群区分来源，"" 则不携带）
 function sp_channels.format_text(msg)
     local ident = (msg.identity and msg.identity ~= "") and (" [设备:" .. msg.identity .. "]") or ""
+    -- 来电提醒（msg.kind == "call"）：只有号码没有正文
+    if msg.kind == "call" then
+        return string.format("%s来电提醒:号码 %s%s\n时间: %s\n固件不接听,如需通话请回拨",
+            msg.prefix or "", msg.sender, ident, msg.time)
+    end
     return string.format("%s收到来自 %s 的短信%s\n时间: %s\n\n%s",
         msg.prefix or "", msg.sender, ident, msg.time, msg.text)
 end

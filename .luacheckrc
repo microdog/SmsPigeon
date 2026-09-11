@@ -5,7 +5,7 @@ std = "lua53"
 globals = {
     "PROJECT", "VERSION",
     "sys", "log", "json", "fskv", "sms", "mobile",
-    "http", "socket", "crypto", "rtos", "gpio",
+    "http", "socket", "crypto", "rtos", "gpio", "cc",
     "network", "errDump", "iob", "fs",
     -- 测试桩与运行器变量
     "MOCKS", "__LUPA__", "__TESTS_FAILED__", "arg",

@@ -29,7 +29,7 @@ dofile(dir .. "/../main.lua")
 
 eq(type(MOCKS.sms_cb), "function", "main装配后短信回调已注册")
 eq(PROJECT, "SmsPigeon", "PROJECT全局变量")
-eq(VERSION, "1.0.0", "VERSION全局变量")
+eq(VERSION, "1.1.0", "VERSION全局变量")
 
 -- 状态灯模块：模式决策纯函数 + 活动闪烁接口
 local sp_led = require "sp_led"
@@ -116,5 +116,27 @@ eq(sp_forward.stats().dropped, 5, "溢出丢弃计数=5")
 base = run_new_tasks(base)
 eq(sp_forward.stats().pending, 0, "worker 一次排空队列")
 eq(#MOCKS.sent, 27, "排空仅转发队列内的20条(7+20)")
+
+-- 来电提醒（CC_IND）：同一通来电多次响铃只提醒一次，挂断后再来电恢复
+MOCKS.cc_lastnum = "13712345678"
+MOCKS.publish("CC_IND", "INCOMINGCALL")
+MOCKS.publish("CC_IND", "INCOMINGCALL")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 28, "来电提醒经短信通道转发(27+1)")
+local callmsg = MOCKS.sent[#MOCKS.sent]
+eq(callmsg.num, "13911112222", "来电提醒发往转发目标")
+assert(callmsg.text:find("来电", 1, true), "来电提醒文本含来电字样")
+assert(callmsg.text:find(mark, 1, true), "来电提醒短信带防环标记")
+n = n + 2
+MOCKS.publish("CC_IND", "DISCONNECTED")
+MOCKS.publish("CC_IND", "INCOMINGCALL")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 29, "挂断后再来电再次提醒")
+MOCKS.publish("CC_IND", "DISCONNECTED")
+MOCKS.sms_cb("13800138000", "信鸽，关闭来电提醒")
+base = run_new_tasks(base)
+MOCKS.publish("CC_IND", "INCOMINGCALL")
+base = run_new_tasks(base)
+eq(#MOCKS.sent, 30, "关闭来电提醒后不再提醒(30=29+关闭应答)")
 
 print(string.format("PASS main_smoke_test (%d assertions)", n))

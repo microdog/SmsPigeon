@@ -14,6 +14,8 @@
   MOCKS.reboots rtos.reboot 调用次数
   MOCKS.mobile  {imei=, iccid=, csq=, number=} mobile 桩返回值
   MOCKS.sms_cb  sms.setNewSmsCb 注册的回调
+  MOCKS.subs    sys.subscribe 订阅表 {topic={fn,...}}（MOCKS.publish 驱动）
+  MOCKS.cc_lastnum cc.lastNum 桩返回值（来电号码，nil=未知号码）
 
 opts 可设置初始 imei/iccid/csq/version。
 ]]
@@ -33,6 +35,7 @@ function M.install(opts)
     local store, sent = {}, {}
     MOCKS = {
         store = store, sent = sent, reboots = 0, tasks = {},
+        subs = {}, cc_lastnum = nil,
         mobile = {
             imei  = opts.imei or "860123456789012",
             iccid = opts.iccid or "",
@@ -54,12 +57,25 @@ function M.install(opts)
         taskInit    = function(fn) MOCKS.tasks[#MOCKS.tasks + 1] = fn end,
         wait        = function() end,
         waitUntil   = function() return true, true end,
-        subscribe   = function() end,
-        unsubscribe = function() end,
+        -- 订阅记录：测试用 MOCKS.publish(topic, ...) 按序驱动回调
+        subscribe   = function(topic, fn)
+            MOCKS.subs[topic] = MOCKS.subs[topic] or {}
+            MOCKS.subs[topic][#MOCKS.subs[topic] + 1] = fn
+        end,
+        unsubscribe = function(topic, fn)
+            local t = MOCKS.subs[topic]
+            if t then for i, f in ipairs(t) do
+                if f == fn then table.remove(t, i) break end
+            end end
+        end,
         timerStart  = function() end,
         timerStop   = function() end,
         run         = function() end,   -- 供 main.lua 装配冒烟测试
     }
+    -- 向全部订阅者发布一条系统消息（模拟 sys.publish）
+    MOCKS.publish = function(topic, ...)
+        for _, fn in ipairs(MOCKS.subs[topic] or {}) do fn(...) end
+    end
 
     log = {
         info   = function() end,
@@ -88,6 +104,11 @@ function M.install(opts)
         set = function(pin, level)
             MOCKS.gpio_last = { pin = pin, level = level }
         end,
+    }
+
+    -- 通话库桩：仅 lastNum（sp_call 来电取号用），其余通话控制不使用
+    cc = {
+        lastNum = function() return MOCKS.cc_lastnum end,
     }
 
     sms = {

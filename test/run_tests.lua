@@ -22,6 +22,7 @@ local TESTS = {
     "sp_auth_test",
     "sp_config_test",
     "sp_commands_test",
+    "sp_call_test",
     "sp_sim_guard_test",
     "main_smoke_test",
 }

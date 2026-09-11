@@ -1,7 +1,7 @@
 --[[
 @module  sp_commands
 @summary SmsPigeon 短信命令处理模块（中文句子命令表 + 执行 + 应答文案）
-@version 2.0
+@version 2.1
 @date    2026.09.11
 @usage
 命令总览（详见 docs/commands.md，全部以"信鸽"为前缀）：
@@ -121,6 +121,7 @@ local function cmd_st(cfg, args, sender)
             local id = sp_commands.resolve_identity(cfg)
             return id ~= "" and id or "无"
         end)(),
+        "来电提醒:" .. (cfg.call_notify and "开" or "关"),
         "通道:",
     }
     for _, key in ipairs(sp_channels.keys()) do
@@ -361,6 +362,27 @@ local function cmd_prefix_clr(cfg, args, sender)
 end
 
 --------------------------------------------------------------------------
+-- 来电提醒（收到来电时向转发目标推送提醒，sp_call 模块监听 CC_IND）
+--------------------------------------------------------------------------
+
+local function cmd_calln_read(cfg, args, sender)
+    return "OK:来电提醒:" .. (cfg.call_notify and "开" or "关")
+        .. "\n收到来电时向已启用的转发目标发送提醒(固件不接听)"
+end
+
+local function cmd_calln_on(cfg, args, sender)
+    cfg.call_notify = true
+    sp_config.save()
+    return "OK:来电提醒已开启,来电将发送提醒到转发目标"
+end
+
+local function cmd_calln_off(cfg, args, sender)
+    cfg.call_notify = false
+    sp_config.save()
+    return "OK:来电提醒已关闭,来电不再提醒"
+end
+
+--------------------------------------------------------------------------
 -- 转发通道
 --------------------------------------------------------------------------
 
@@ -590,6 +612,9 @@ CMDS = {
     { cmd = "FWD_READ",   usage = "信鸽，转发",                 run = cmd_fwd_read },
     { cmd = "FWD_SMS_ADD", usage = "信鸽，增加转发号码，<号码>", run = cmd_fwd_sms_add },
     { cmd = "FWD_SMS_DEL", usage = "信鸽，删除转发号码，<号码>", run = cmd_fwd_sms_del },
+    { cmd = "CALLN_READ", usage = "信鸽，来电提醒",             run = cmd_calln_read },
+    { cmd = "CALLN_ON",   usage = "信鸽，开启来电提醒",          run = cmd_calln_on },
+    { cmd = "CALLN_OFF",  usage = "信鸽，关闭来电提醒",          run = cmd_calln_off },
     { cmd = "CH_ON",      usage = "信鸽，开启<通道>",            run = cmd_ch_on },
     { cmd = "CH_OFF",     usage = "信鸽，关闭<通道>",            run = cmd_ch_off },
     { cmd = "CH_CLR",     usage = "信鸽，清空<通道>",            run = cmd_ch_clr },

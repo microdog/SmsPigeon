@@ -1,7 +1,7 @@
 --[[
 @module  sp_forward
 @summary SmsPigeon 转发引擎（短信入口：命令分流 + 消息转发）
-@version 1.4
+@version 1.5
 @date    2026.09.11
 @usage
 本模块注册短信接收回调，是所有收到短信的唯一入口：
@@ -108,6 +108,7 @@ local function fwd_worker()
         local m = table.remove(queue, 1)
         local cfg = sp_config.get()
         sp_channels.dispatch({
+            kind = m.kind or "sms",
             sender = m.num,
             text = m.txt,
             time = m.time,
@@ -120,8 +121,11 @@ local function fwd_worker()
     worker_running = false
 end
 
-enqueue_forward = function(num, txt)
-    queue[#queue + 1] = { num = num, txt = txt, time = os.date("%Y-%m-%d %H:%M:%S") }
+-- 事件入队：kind 为 "sms"（普通短信转发）或 "call"（来电提醒），
+-- 通道按 msg.kind 渲染对应文案；共用同一队列与限速（来电提醒同样
+-- 受洪泛保护与 2s 间隔约束）
+local function push_event(kind, num, txt)
+    queue[#queue + 1] = { kind = kind, num = num, txt = txt, time = os.date("%Y-%m-%d %H:%M:%S") }
     if #queue > QUEUE_MAX then
         table.remove(queue, 1)
         dropped = dropped + 1
@@ -131,6 +135,15 @@ enqueue_forward = function(num, txt)
         worker_running = true
         sys.taskInit(fwd_worker)
     end
+end
+
+enqueue_forward = function(num, txt)
+    push_event("sms", num, txt)
+end
+
+-- 来电提醒入口（sp_call 调用）：将来电推入转发队列
+function sp_forward.notify_call(num)
+    push_event("call", num)
 end
 
 -- 队列运行状态（排障/测试观测用）

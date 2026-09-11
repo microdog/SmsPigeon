@@ -1,7 +1,7 @@
 --[[
 @module  sp_config
 @summary SmsPigeon 配置持久化模块（基于 fskv 键值存储）
-@version 1.1
+@version 1.2
 @date    2026.09.11
 @usage
 本模块负责所有用户配置的读写、默认值合并与恢复出厂设置。
@@ -28,9 +28,10 @@ local KEY_FWD   = "sp_fwd"     -- 各转发通道配置(table)
 local KEY_ICCID = "sp_iccid"   -- 最近一次绑定的 SIM 卡 ICCID(复位判定用)
 local KEY_NOSIM = "sp_nosim" -- 连续无卡开机计数
 local KEY_MARK = "sp_mark"  -- 防环实例标记(随机hex,不随恢复出厂清除:无鉴权作用,清除反而留下无标记空窗)
+local KEY_CALLN = "sp_calln" -- 来电提醒开关(收到来电时向转发目标发提醒)
 
 -- 恢复出厂时清除的键（sp_mark 刻意不在其中，见其注释）
-local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_IDENT, KEY_FWD, KEY_ICCID, KEY_NOSIM }
+local ALL_KEYS = { KEY_STATE, KEY_WL_ON, KEY_WL, KEY_PW, KEY_PFX, KEY_IDENT, KEY_FWD, KEY_ICCID, KEY_NOSIM, KEY_CALLN }
 
 -- 配置缓存（由 init() 填充）
 local cache = nil
@@ -65,6 +66,7 @@ function sp_config.defaults()
             serverchan = { on = false, sendkey = "" },
             wecom      = { on = false, key = "" },        -- 企业微信消息推送（原群机器人）
         },
+        call_notify = true,                                -- 来电提醒：收到来电时向转发目标发提醒
         mark = "",                                         -- 防环实例标记（内部字段，sp_forward 首启生成）
         iccid = "",                                       -- SIM 卡绑定信息（内部字段）
         nosim_cnt = 0,                                    -- 连续无卡开机计数（内部字段）
@@ -113,6 +115,9 @@ local function load_cfg()
             end
         end
     end
+    v = fskv.get(KEY_CALLN)
+    if type(v) == "boolean" then cfg.call_notify = v end
+
     v = fskv.get(KEY_MARK)
     if type(v) == "string" and v ~= "" then cfg.mark = v end
 
@@ -163,6 +168,7 @@ function sp_config.save()
         ok = kv_set(KEY_IDENT, c.identity) and ok
     end
     ok = kv_set(KEY_FWD, c.fwd) and ok
+    ok = kv_set(KEY_CALLN, c.call_notify) and ok
     return ok
 end
 
