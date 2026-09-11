@@ -84,8 +84,10 @@ local function cmd_init(cfg, args, sender)
     -- 已初始化的固件不可再次初始化
     if cfg.initialized then return "ERROR" end
     -- IMEI 鉴权：数字串必须与本机 IMEI 完全一致（支持中文数字/分组写法）；
-    -- 失败回笼统 ERROR，不泄露原因
-    if sp_at.digits(args[1] or "") ~= sp_at.digits(sp_platform.imei()) then
+    -- 本机 IMEI 不可读（空/过短）时一律拒绝——否则比对退化为 "" == ""，
+    -- 任何人发"信鸽，初始化"即可接管设备；失败回笼统 ERROR，不泄露原因
+    local imei = sp_at.digits(sp_platform.imei())
+    if #imei < 15 or imei ~= sp_at.digits(args[1] or "") then
         return "ERROR"
     end
     local n = sp_auth.normalize_number(sender)

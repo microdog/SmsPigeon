@@ -48,6 +48,15 @@ eq(reply, nil, "未初始化时非初始化命令静默丢弃")
 is_cmd, reply = send(ME, "hello world")
 eq(is_cmd, false, "普通短信标记为非命令")
 
+-- S1 回归：本机 IMEI 不可读（空）时初始化必须拒绝，防止比对退化为 "" == ""
+MOCKS.mobile.imei = ""
+is_cmd, reply = send(ME, "信鸽，初始化")
+eq(is_cmd, true, "初始化是命令")
+eq(reply, "ERROR", "本机IMEI不可读时无参初始化拒绝")
+is_cmd, reply = send(ME, "信鸽，初始化，000000000000000")
+eq(reply, "ERROR", "本机IMEI不可读时带参初始化也拒绝")
+MOCKS.mobile.imei = "860123456789012"
+
 is_cmd, reply = send(ME, "信鸽，初始化，000000000000000")
 eq(is_cmd, true, "初始化是命令")
 eq(reply, "ERROR", "IMEI错误回笼统ERROR")
