@@ -96,11 +96,12 @@ local function boot_task()
         sp_sim_guard.handle_no_sim_boot()
     end
 
-    -- 阶段二：持续监听热插拔；插卡后稍等 ICCID 可读再比对
+    -- 阶段二：持续监听热插拔；插卡后稍等 ICCID 可读再比对。
+    -- 回调由调度器直接调用，禁止 sys.wait——用定时器延后比对
+    -- （check_iccid 幂等，重复 RDY 多次触发无害）
     local function on_hotplug(status)
         if status == "RDY" then
-            sys.wait(2000)
-            sp_sim_guard.check_iccid()
+            sys.timerStart(sp_sim_guard.check_iccid, 2000)
         end
     end
     sys.subscribe("SIM_IND", on_hotplug)
