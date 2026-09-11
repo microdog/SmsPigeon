@@ -9,14 +9,14 @@
 | 文件 | 职责 | 关键符号 |
 |---|---|---|
 | `main.lua` | 入口：PROJECT/VERSION 与模块装配顺序（顺序有依赖，勿乱动） | `PROJECT` `VERSION` `sys.run` |
-| `sp_config.lua` | 配置缓存、fskv 读写、默认值合并、恢复出厂 | `get` `save` `save_iccid` `save_nosim` `factory_reset` `MAX_LIST` |
+| `sp_config.lua` | 配置缓存、fskv 读写（写失败告警）、默认值合并、恢复出厂 | `get` `save` `save_iccid` `save_mark` `save_nosim` `factory_reset` `MAX_LIST` |
 | `sp_at.lua` | 中文句子命令解析：信鸽前缀、短语最长匹配、全角/顿号句号归一、中文数字（纯逻辑） | `parse(text, password)` `digits` `cn_digits` `trim` |
-| `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块）+ 短信发送出口 | `imei` `iccid` `msisdn` `registered` `csq` `send_sms` `send_sms_sync` `reboot` |
+| `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块）+ 短信发送出口（互斥串行） | `imei` `iccid` `msisdn` `registered` `csq` `send_sms` `send_sms_sync` `set_sms_debug` `rand_hex8` `reboot` |
 | `sp_led.lua` | 状态灯（开发板 NET 灯）：网络/初始化指示与短信到达三连闪 | `pattern_for` `blink` |
 | `sp_commands.lua` | 命令表（中文命令标识）、执行、应答文案、未初始化/授权门禁 | `handle(sender, text)` `CH_ALIAS` `CMDS` |
-| `sp_forward.lua` | 短信接收入口：命令分流/转发分发（发送走 `sp_platform.send_sms`） | `on_sms`（内部）`sms.setNewSmsCb` 注册 |
+| `sp_forward.lua` | 短信接收入口：命令分流/回环丢弃/转发单 worker 有界队列（发送走 `sp_platform.send_sms`） | `stats` `on_sms`（内部）`sms.setNewSmsCb` 注册 |
 | `sp_channels.lua` | 通道注册表 + HTTP/表单/联网等待工具 | `register` `dispatch` `keys` `wait_net` `http_post_json` `format_text` |
-| `sp_chan_sms.lua` | 短信转发通道（离线可用，注册序第一） | `ch.send` `ch.is_configured` |
+| `sp_chan_sms.lua` | 短信转发通道（离线可用，注册序第一；防环：自号码跳过+实例标记） | `ch.send` `ch.is_configured` |
 | `sp_chan_dingtalk.lua` | 钉钉 Webhook（HmacSHA256 加签，毫秒时间戳） | 同上 |
 | `sp_chan_feishu.lua` | 飞书 Webhook（签名校验，秒时间戳） | 同上 |
 | `sp_chan_serverchan.lua` | Server酱（SendKey 或完整 URL，表单 POST） | 同上 |
