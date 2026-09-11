@@ -112,6 +112,7 @@ ICCID:8986xxxxxxxxxxxxxxxx
  钉钉:开
  飞书:未配置
  Server酱:未配置
+ 企业微信:未配置
 ```
 
 ### 白名单管理
@@ -143,7 +144,7 @@ ICCID:8986xxxxxxxxxxxxxxxx
 
 `信鸽，转发` 查看所有通道状态。
 
-通道名：`短信`、`钉钉`、`飞书`、`Server酱`。
+通道名：`短信`、`钉钉`、`飞书`、`Server酱`、`企业微信`。
 
 通用操作（`<通道>` 直接跟在动词后或用逗号隔开均可）：
 
@@ -202,6 +203,19 @@ ICCID:8986xxxxxxxxxxxxxxxx
 
 SendKey 在 [sct.ftqq.com](https://sct.ftqq.com/) 登录后获取；完整 URL
 形式适用于 Server酱³ 或自建兼容服务。
+
+#### 企业微信（消息推送，原"群机器人"）
+
+```
+信鸽，设置企业微信，<key或webhook地址>
+信鸽，设置企业微信，693a91f6-7aoc-4bc4-97a0-0ec2sifa5aaa      ← 纯 key 形式（推荐）
+信鸽，设置企业微信，https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx
+```
+
+- 机器人创建：企业微信群 → 群设置 → 添加"消息推送"（原"群机器人"）；
+- **纯 key 形式**：key 为 webhook 地址中 `key=` 参数的值（UUID 形式），
+  规避 URL 特征被运营商过滤，固件自动拼出标准地址；
+- 接口文档：[消息推送配置说明](https://developer.work.weixin.qq.com/document/path/99110)。
 
 #### 设置成功即开启
 

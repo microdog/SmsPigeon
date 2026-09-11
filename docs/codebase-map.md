@@ -20,6 +20,7 @@
 | `sp_chan_dingtalk.lua` | 钉钉 Webhook（HmacSHA256 加签，毫秒时间戳） | 同上 |
 | `sp_chan_feishu.lua` | 飞书 Webhook（签名校验，秒时间戳） | 同上 |
 | `sp_chan_serverchan.lua` | Server酱（SendKey 或完整 URL，表单 POST） | 同上 |
+| `sp_chan_wecom.lua` | 企业微信消息推送（key 拼标准 webhook，errcode 判定） | 同上 |
 | `sp_sim_guard.lua` | 换卡 ICCID 比对复位、无卡开机计数复位、热插拔监听 | `check_iccid` `handle_no_sim_boot` `boot_task` |
 | `sp_net.lua` | IP_READY 追加公共 DNS、SNTP 周期对时 | `ntp_task`（内部） |
 
@@ -71,6 +72,7 @@
     dingtalk   = { on=bool, url="", secret="" },
     feishu     = { on=bool, url="", secret="" },
     serverchan = { on=bool, sendkey="" },
+    wecom      = { on=bool, key="" },
   },
   iccid      = "",             -- fskv: sp_iccid（SIM 绑定，复位判定用）
   nosim_cnt  = 0,             -- fskv: sp_nosim（连续无卡开机计数）

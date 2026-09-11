@@ -9,6 +9,7 @@ require "sp_chan_sms"
 require "sp_chan_dingtalk"
 require "sp_chan_feishu"
 require "sp_chan_serverchan"
+require "sp_chan_wecom"
 
 local sp_config   = require "sp_config"
 local sp_commands = require "sp_commands"
@@ -247,6 +248,24 @@ is_cmd, reply = send(ME, "信鸽，设置飞书，带空格的 token")
 contains(reply, "ERROR", "含空格token报错")
 is_cmd, reply = send(ME, "信鸽，设置飞书，https://open.feishu.cn/open-apis/bot/v2/hook/xxx")
 contains(reply, "OK", "配置飞书(免签)")
+
+-- 企业微信：纯 key 与完整 webhook 两种形式
+is_cmd, reply = send(ME, "信鸽，设置企业微信，693a91f6-7aoc-4bc4-97a0-0ec2sifa5aaa")
+contains(reply, "OK", "纯key配置企业微信")
+eq(sp_config.get().fwd.wecom.key, "693a91f6-7aoc-4bc4-97a0-0ec2sifa5aaa", "key已保存")
+eq(sp_config.get().fwd.wecom.on, true, "设置后自动开启")
+
+is_cmd, reply = send(ME, "信鸽，设置企业微信，https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=71017f82-e027-4c5d-a618-eb4ee01750e9")
+contains(reply, "OK", "完整webhook配置企业微信")
+eq(sp_config.get().fwd.wecom.key, "71017f82-e027-4c5d-a618-eb4ee01750e9", "从URL抽取key")
+
+is_cmd, reply = send(ME, "信鸽，设置企业微信，短key")
+contains(reply, "ERROR", "过短key报错")
+
+is_cmd, reply = send(ME, "信鸽，关闭企业微信")
+contains(reply, "OK", "通用动词操作企业微信")
+is_cmd, reply = send(ME, "信鸽，开启企业微信")
+contains(reply, "OK", "开启企业微信")
 
 is_cmd, reply = send(ME, "信鸽，开启，不存在的通道")
 contains(reply, "ERROR", "未知通道报错")

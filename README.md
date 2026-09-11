@@ -7,7 +7,7 @@
 ## 功能特性
 
 - **中文句子命令**：`信鸽，状态` 式自然命令（规避运营商对机器特征短信的过滤），全部配置通过短信完成，无需连接电脑
-- **多种转发通道**：短信 / 钉钉 Webhook / 飞书 Webhook / Server酱，可同时启用
+- **多种转发通道**：短信 / 钉钉 / 飞书 / Server酱 / 企业微信，可同时启用
 - **白名单鉴权**：默认仅白名单号码可下发命令（初始化时自动登记第一个号码）
 - **密码模式**：可选将 `信鸽` 前缀替换为自定义密码（支持中文），与白名单相互独立、可叠加
 - **IMEI 初始化**：首次使用必须 `信鸽，初始化，<IMEI>`，防误配防冒配；已初始化不可重复初始化
@@ -91,6 +91,8 @@ sp_chan_sms.lua           通道：短信转发
 sp_chan_dingtalk.lua      通道：钉钉 Webhook（加签）
 sp_chan_feishu.lua        通道：飞书 Webhook（签名）
 sp_chan_serverchan.lua    通道：Server酱
+sp_chan_wecom.lua          通道：企业微信（消息推送）
+sp_chan_wecom.lua          通道：企业微信（消息推送）
 sp_sim_guard.lua          换卡检测 + 无卡开机计数 + 自动复位
 sp_net.lua                联网状态 + NTP 对时（Webhook 加签依赖）
 sp_platform.lua           平台适配层（唯一接触硬件差异的模块）

@@ -48,6 +48,7 @@ require "sp_chan_sms"           -- 短信通道
 require "sp_chan_dingtalk"      -- 钉钉通道
 require "sp_chan_feishu"        -- 飞书通道
 require "sp_chan_serverchan"    -- Server酱通道
+require "sp_chan_wecom"         -- 企业微信通道
 
 require "sp_commands"           -- 短信命令处理
 require "sp_forward"            -- 短信入口（命令 + 转发）

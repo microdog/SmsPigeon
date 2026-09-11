@@ -17,10 +17,11 @@
   信鸽，设置密码，<密码> / 清除密码
   信鸽，转发                  查看转发通道
   信鸽，增加转发号码，<号码> / 删除转发号码，<号码>
-  信鸽，开启<通道> / 关闭<通道> / 清空<通道>（通道：短信/钉钉/飞书/Server酱）
+  信鸽，开启<通道> / 关闭<通道> / 清空<通道>（通道：短信/钉钉/飞书/Server酱/企业微信）
   信鸽，设置钉钉，<webhook或token>[，<加签密钥>]
   信鸽，设置飞书，<webhook或hook>[，<签名密钥>]
   信鸽，设置Server酱，<SendKey或URL>
+  信鸽，设置企业微信，<key或webhook>
   信鸽，恢复出厂
   信鸽，重启
 
@@ -42,6 +43,7 @@ local CH_ALIAS = {
     ["短信"] = "sms", ["短信转发"] = "sms",
     ["钉钉"] = "dingtalk",
     ["飞书"] = "feishu",
+    ["企业微信"] = "wecom", ["wecom"] = "wecom",
     ["Server酱"] = "serverchan",
     ["serverchan"] = "serverchan", ["SC"] = "serverchan",
 }
@@ -278,7 +280,7 @@ end
 -- 通用通道开关/清空：开启<通道> / 关闭<通道> / 清空<通道>
 local function cmd_ch_on(cfg, args, sender)
     local key = channel_of(args[1])
-    if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱" end
+    if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱/企业微信" end
     local ch = sp_channels.get(key)
     if not ch.is_configured(cfg.fwd[key]) then
         return "ERROR:" .. ch.name .. " 未配置,请先设置"
@@ -290,7 +292,7 @@ end
 
 local function cmd_ch_off(cfg, args, sender)
     local key = channel_of(args[1])
-    if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱" end
+    if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱/企业微信" end
     local ch = sp_channels.get(key)
     cfg.fwd[key].on = false
     sp_config.save()
@@ -299,7 +301,7 @@ end
 
 local function cmd_ch_clr(cfg, args, sender)
     local key = channel_of(args[1])
-    if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱" end
+    if not key then return "ERROR:未知通道,支持 短信/钉钉/飞书/Server酱/企业微信" end
     local ch = sp_channels.get(key)
     cfg.fwd[key] = { on = false }
     sp_config.save()
@@ -340,6 +342,24 @@ local function make_web_set(key)
         sp_config.save()
         return "OK:" .. ch.name .. "已配置并开启" .. (secret ~= "" and "(加签)" or "")
     end
+end
+
+-- 企业微信消息推送（原"群机器人"，文档 path/99110）：
+-- 设置企业微信，<key或webhook地址>；key 为地址中 key= 参数的值
+local function cmd_wecom_set(cfg, args, sender)
+    local k = args[1] or ""
+    if k == "" then return "ERROR:缺少 key" end
+    if k:sub(1, 7):lower() == "http://" or k:sub(1, 8):lower() == "https://" then
+        k = k:match("key=([%w%-]+)") or ""
+    end
+    if not k:match("^[%w%-]+$") or #k < 16 then
+        return "ERROR:key 无效(为webhook地址中 key= 后面的部分)"
+    end
+    local chcfg = cfg.fwd.wecom
+    chcfg.key = k
+    chcfg.on = true
+    sp_config.save()
+    return "OK:企业微信已配置并开启"
 end
 
 -- Server酱：设置Server酱，<SendKey或完整URL>
@@ -409,6 +429,7 @@ CMDS = {
     { cmd = "DING_SET",   usage = "信鸽，设置钉钉，<webhook或token>[，<加签密钥>]", run = make_web_set("dingtalk") },
     { cmd = "FS_SET",     usage = "信鸽，设置飞书，<webhook或hook>[，<签名密钥>]", run = make_web_set("feishu") },
     { cmd = "SC_SET",     usage = "信鸽，设置Server酱，<SendKey>", run = cmd_sc_set },
+    { cmd = "WECOM_SET",  usage = "信鸽，设置企业微信，<key或webhook>", run = cmd_wecom_set },
     { cmd = "RESET",      usage = "信鸽，恢复出厂",             run = cmd_reset },
     { cmd = "REBOOT",     usage = "信鸽，重启",                 run = cmd_reboot },
 }

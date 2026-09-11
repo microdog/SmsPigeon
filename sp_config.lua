@@ -52,6 +52,7 @@ function sp_config.defaults()
             dingtalk   = { on = false, url = "", secret = "" },
             feishu     = { on = false, url = "", secret = "" },
             serverchan = { on = false, sendkey = "" },
+            wecom      = { on = false, key = "" },        -- 企业微信消息推送（原群机器人）
         },
         iccid = "",                                       -- SIM 卡绑定信息（内部字段）
         nosim_cnt = 0,                                    -- 连续无卡开机计数（内部字段）

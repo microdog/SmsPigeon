@@ -149,6 +149,8 @@ local PHRASES = {
     { "配置钉钉",     "DING_SET" },
     { "设置飞书",     "FS_SET" },
     { "配置飞书",     "FS_SET" },
+    { "设置企业微信", "WECOM_SET" },
+    { "配置企业微信", "WECOM_SET" },
     { "设置Server酱", "SC_SET" },
     { "配置Server酱", "SC_SET" },
     { "转发",         "FWD_READ" },
