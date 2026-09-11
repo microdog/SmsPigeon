@@ -1,8 +1,8 @@
 --[[
 @module  sp_commands
 @summary SmsPigeon 短信命令处理模块（中文句子命令表 + 执行 + 应答文案）
-@version 2.2
-@date    2026.09.11
+@version 2.3
+@date    2026.09.12
 @usage
 命令总览（详见 docs/commands.md，全部以"信鸽"为前缀）：
 
@@ -415,10 +415,14 @@ local function cmd_hb_read(cfg, args, sender)
 end
 
 local function cmd_hb_set(cfg, args, sender)
-    -- digits 返回 (串, gsub 替换数) 双值：直接做 tonumber 末位实参会把
-    -- 替换数当进制参数（tonumber("24",1)=nil），先落局部变量截断
-    local d = sp_at.digits(args[1] or "")
-    local h = tonumber(d)
+    -- 间隔是数量：只认阿拉伯数字。中文数字是电话号码"逐位读法"
+    -- （sp_at.digits 逐字查表），数量词会静默错值（二十→2、一百→1），
+    -- 宁可报错提示也不猜
+    local a = args[1] or ""
+    if not a:match("^%d+$") then
+        return "ERROR:间隔请用阿拉伯数字(1-168)\n用法 信鸽，设置心跳，24"
+    end
+    local h = tonumber(a)
     if not sp_heartbeat.valid_hours(h) then
         return "ERROR:间隔需 1-168 的整数小时\n用法 信鸽，设置心跳，24"
     end

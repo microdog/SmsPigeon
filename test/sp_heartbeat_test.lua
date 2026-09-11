@@ -1,6 +1,6 @@
 --[[
 sp_heartbeat 心跳报平安测试：默认关不布防、命令设置/关闭全链路、
-中文数字间隔、心跳文案含信号与统计摘要、持久化。
+阿拉伯数字间隔（中文数量词拒绝）、心跳文案含信号与统计摘要、持久化。
 定时器经 mocks 的 MOCKS.timers 记录，直接调用 .fn() 模拟到期。
 ]]
 
@@ -54,8 +54,8 @@ sp_config.save()
 sp_heartbeat.restart()
 eq(hb_timer(), nil, "已初始化但间隔为0:仍不布防")
 
--- 设置心跳（中文数字二十四）：应答 + 布防 24h 循环定时器
-MOCKS.sms_cb(ADMIN, "信鸽，设置心跳，二十四")
+-- 设置心跳（阿拉伯数字）：应答 + 布防 24h 循环定时器
+MOCKS.sms_cb(ADMIN, "信鸽，设置心跳，24")
 run_tasks()
 eq(#MOCKS.sent, 1, "设置心跳有应答")
 assert(MOCKS.sent[1].text:find("每 24 小时", 1, true), "应答含间隔")
@@ -100,6 +100,15 @@ n = n + 1
 MOCKS.sms_cb(ADMIN, "信鸽，设置心跳，abc")
 run_tasks()
 assert(MOCKS.sent[7].text:find("ERROR", 1, true), "非数字拒绝")
+n = n + 1
+MOCKS.sms_cb(ADMIN, "信鸽，设置心跳，二十四")
+run_tasks()
+assert(MOCKS.sent[8].text:find("ERROR", 1, true), "中文数量词拒绝(逐位读法会静默错值)")
+assert(sp_config.get().hb_hours == 0, "数量词未落配置")
+n = n + 1
+MOCKS.sms_cb(ADMIN, "信鸽，设置心跳，二十")
+run_tasks()
+assert(MOCKS.sent[9].text:find("ERROR", 1, true), "整十数量词拒绝(二十≠2)")
 n = n + 1
 
 -- 未初始化时设置成功也不布防（beat 到期自校验兜底）
