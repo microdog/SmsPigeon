@@ -17,6 +17,7 @@
   信鸽，设置密码，<密码> / 清除密码
   信鸽，设置前缀，<前缀文本> / 清除前缀   转发消息自定义前缀（默认空）
   信鸽，设置标识，<标识文本> / 关闭标识 / 清除标识   设备标识（默认自动取手机号尾4位）
+  信鸽，发送短信，<号码>，<内容>         控制本机向指定号码发送一条短信
   信鸽，转发                  查看转发通道
   信鸽，增加转发号码，<号码> / 删除转发号码，<号码>
   信鸽，开启<通道> / 关闭<通道> / 清空<通道>（通道：短信/钉钉/飞书/Server酱/企业微信）
@@ -234,6 +235,26 @@ local function cmd_pw_clr(cfg, args, sender)
         return "OK:密码已清除\n警告:白名单已关闭且未设密码,任何人均可控制本机"
     end
     return "OK:密码已清除,命令恢复默认前缀 信鸽"
+end
+
+--------------------------------------------------------------------------
+-- 远程发短信（控制本机向指定号码发送一条短信）
+--------------------------------------------------------------------------
+
+local function cmd_sms_send(cfg, args, sender)
+    local n = sp_auth.normalize_number(args[1] or "")
+    if not num_valid(n) then
+        return "ERROR:号码无效,用法 信鸽，发送短信，<号码>，<内容>"
+    end
+    -- 内容为其余参数：拆分产生的逗号用中文逗号拼回
+    local parts = {}
+    for i = 2, #args do parts[#parts + 1] = args[i] end
+    local content = table.concat(parts, "，")
+    if content == "" then
+        return "ERROR:缺少短信内容"
+    end
+    sp_platform.send_sms(n, content)
+    return "OK:已提交发送,收件:" .. n
 end
 
 --------------------------------------------------------------------------
@@ -535,6 +556,7 @@ CMDS = {
     { cmd = "IDENT_SET",  usage = "信鸽，设置标识，<标识文本>", run = cmd_ident_set },
     { cmd = "IDENT_OFF",  usage = "信鸽，关闭标识",             run = cmd_ident_off },
     { cmd = "IDENT_AUTO", usage = "信鸽，清除标识",             run = cmd_ident_auto },
+    { cmd = "SMS_SEND",  usage = "信鸽，发送短信，<号码>，<内容>", run = cmd_sms_send },
     { cmd = "FWD_READ",   usage = "信鸽，转发",                 run = cmd_fwd_read },
     { cmd = "FWD_SMS_ADD", usage = "信鸽，增加转发号码，<号码>", run = cmd_fwd_sms_add },
     { cmd = "FWD_SMS_DEL", usage = "信鸽，删除转发号码，<号码>", run = cmd_fwd_sms_del },

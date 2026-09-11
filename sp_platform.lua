@@ -1,19 +1,20 @@
 --[[
 @module  sp_platform
-@summary SmsPigeon 平台适配层（唯一允许接触硬件差异 API 的模块）
-@version 1.0
+@summary SmsPigeon 平台适配层（唯一允许接触硬件/系统差异 API 的模块）
+@version 1.1
 @date    2026.09.11
 @usage
 本模块集中封装与模组硬件/固件相关的系统 API 访问：
-IMEI/ICCID/信号查询、重启、模块型号等。业务模块只调用本模块的抽象接口，
-不直接调用 mobile/rtos，从而在适配新的 LuatOS 模组（Air780EPM/Air780EHM 等）时
-只需修改/新增本模块。
+IMEI/ICCID/信号查询、重启、模块型号、短信发送（send_sms/send_sms_sync）。
+业务模块只调用本模块的抽象接口，不直接调用 mobile/rtos/sms 发送，
+从而在适配新的 LuatOS 模组（Air780EPM/Air780EHM 等）时只需修改本模块。
 
 当前适配：Air780EHV（LuatOS，仅 Lua 二次开发，无 AT 固件）。
 移植说明见 docs/codebase-map.md 与 README「二次开发」章节。
 
-注意：本模块所有函数都在调用时才访问全局 API（不在加载期触碰），
-方便在纯 Lua 测试环境中用 mock 替换。
+注意：本模块函数都在调用时才访问全局 API；例外是短信收发就绪广播
+（SMS_READY/CC_IND，开机一次性广播，晚订阅永远错过）与 sms.debug，
+这两者在模块加载期订阅/设置，sys/sms 不存在的纯 Lua 环境自动跳过。
 ]]
 
 local sp_platform = {}
@@ -57,6 +58,86 @@ function sp_platform.registered()
         return s == mobile.REGISTERED or s == mobile.REGISTERED_ROAMING
     end
     return false
+end
+
+--------------------------------------------------------------------------
+-- 短信发送出口（系统 sms API 的唯一发送路径）
+--------------------------------------------------------------------------
+
+-- 开启内核短信调试日志（官方 sms.debug 开关）：
+-- 打印收发短信的 PDU 级细节，排查"短信是否到达模组"类问题必需
+if sms and sms.debug then
+    sms.debug(true)
+end
+
+-- 短信收发是否就绪（就绪后缓存，避免重复等待）
+local sms_ready = false
+
+-- 开机即订阅：捕获一次性的 SMS_READY/CC_IND 广播
+if sys and sys.subscribe then
+    sys.subscribe("SMS_READY", function() sms_ready = true end)
+    sys.subscribe("CC_IND", function() sms_ready = true end)
+end
+
+-- 等待短信收发就绪：优先 SMS_READY（新内核固件），回退 CC_IND；
+-- 就绪标志已被开机订阅置位时立即返回；都未广播时超时后仍尝试发送
+local function ensure_sms_ready()
+    if sms_ready then return true end
+    if not (sys and sys.waitUntil) then return true end
+    if sys.waitUntil("SMS_READY", 10000) then
+        sms_ready = true
+    elseif sys.waitUntil("CC_IND", 20000) then
+        sms_ready = true
+    else
+        log.warn("sp_platform", "等待短信就绪超时，仍尝试发送")
+    end
+    return sms_ready
+end
+
+--[[
+同步发送一条短信：就绪等待 + 提交 + SMS_SENT 结果等待与日志。
+返回 true 表示提交成功且未收到失败事件（SMS_SENT 超时视为成功：
+旧固件无此事件）；false 表示提交失败或收到明确失败事件。
+必须在任务上下文（sys.taskInit 内）调用。
+真实投递结果由 SMS_SENT 事件携带：result, rp_cause, rp_cause_str,
+msg_ref, error_code（error_code：0成功 331无网络/SIM未开通短信
+332网络超时 500未知 等，详见 docs.openluat.com/osapi/core/sms）
+]]
+function sp_platform.send_sms_sync(num, text)
+    if not (sms and sms.send) then
+        log.warn("sp_platform", "sms.send 不可用")
+        return false
+    end
+    ensure_sms_ready()
+    if not sms.send(num, text) then
+        log.warn("sp_platform", "短信提交失败 ->", num)
+        return false
+    end
+    if not (sys and sys.waitUntil) then return true end
+    local got, result, _, rp_cause_str, _, error_code =
+        sys.waitUntil("SMS_SENT", 10000)
+    if got and result then
+        log.info("sp_platform", "短信 ->", num, "发送成功")
+        return true
+    elseif got then
+        log.warn("sp_platform", "短信 ->", num, "发送失败",
+            "error_code=" .. tostring(error_code), tostring(rp_cause_str))
+        return false
+    end
+    log.warn("sp_platform", "短信 ->", num, "结果超时,视为已提交")
+    return true
+end
+
+-- 异步发送一条短信（独立任务，不阻塞短信接收回调）：
+-- 命令应答与远程发短信等场合使用
+function sp_platform.send_sms(num, text)
+    if sys and sys.taskInit then
+        sys.taskInit(function()
+            sp_platform.send_sms_sync(num, text)
+        end)
+    else
+        sp_platform.send_sms_sync(num, text)
+    end
 end
 
 --------------------------------------------------------------------------

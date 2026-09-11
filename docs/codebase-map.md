@@ -11,10 +11,10 @@
 | `main.lua` | 入口：PROJECT/VERSION 与模块装配顺序（顺序有依赖，勿乱动） | `PROJECT` `VERSION` `sys.run` |
 | `sp_config.lua` | 配置缓存、fskv 读写、默认值合并、恢复出厂 | `get` `save` `save_iccid` `save_nosim` `factory_reset` `MAX_LIST` |
 | `sp_at.lua` | 中文句子命令解析：信鸽前缀、短语最长匹配、全角/顿号句号归一、中文数字（纯逻辑） | `parse(text, password)` `digits` `cn_digits` `trim` |
-| `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块） | `imei` `iccid` `registered` `csq` `model` `reboot` `LED_GPIO` `LED_ACTIVE_HIGH` |
+| `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块）+ 短信发送出口 | `imei` `iccid` `msisdn` `registered` `csq` `send_sms` `send_sms_sync` `reboot` |
 | `sp_led.lua` | 状态灯（开发板 NET 灯）：网络/初始化指示与短信到达三连闪 | `pattern_for` `blink` |
 | `sp_commands.lua` | 命令表（中文命令标识）、执行、应答文案、未初始化/授权门禁 | `handle(sender, text)` `CH_ALIAS` `CMDS` |
-| `sp_forward.lua` | 短信唯一入口：命令分流/转发分发/应答发送 | `on_sms`（内部）`sms.setNewSmsCb` 注册 |
+| `sp_forward.lua` | 短信接收入口：命令分流/转发分发（发送走 `sp_platform.send_sms`） | `on_sms`（内部）`sms.setNewSmsCb` 注册 |
 | `sp_channels.lua` | 通道注册表 + HTTP/表单/联网等待工具 | `register` `dispatch` `keys` `wait_net` `http_post_json` `format_text` |
 | `sp_chan_sms.lua` | 短信转发通道（离线可用，注册序第一） | `ch.send` `ch.is_configured` |
 | `sp_chan_dingtalk.lua` | 钉钉 Webhook（HmacSHA256 加签，毫秒时间戳） | 同上 |
@@ -49,6 +49,8 @@
   is_configured,send}` + `sp_config.defaults().fwd` 增键 +
   `sp_commands.CH_ALIAS` 增别名 + `main.lua` 增 require
   （详见 README「添加新转发通道」）
+- **所有出栈短信**统一走 `sp_platform.send_sms`/`send_sms_sync`
+  （就绪等待 + SMS_SENT 结果日志；命令应答/远程发短信/短信通道转发）
 - **适配新模组**：只改 `sp_platform.lua`；LuatOS API 在 Air780E 系列通用
 - **Webhook 加签**：`sp_chan_dingtalk`（毫秒+URL编码）/`sp_chan_feishu`
   （秒级+Base64）；时间源依赖 `sp_net` 的 NTP 同步

@@ -48,11 +48,14 @@ function sp_channels.dispatch(msg, fwdcfg)
         local ch = registry[key]
         local chcfg = fwdcfg[key]
         if ch and chcfg and chcfg.on and ch.is_configured(chcfg) then
-            local ok, err = pcall(ch.send, msg, chcfg)
-            if ok then
+            -- pcall 只区分"是否抛错"；通道自身返回 false 表示发送失败
+            local ok, sent_ok, err = pcall(ch.send, msg, chcfg)
+            if ok and sent_ok ~= false then
                 log.info("sp_channels", "转发成功:", ch.name)
+            elseif ok then
+                log.warn("sp_channels", "转发失败:", ch.name, tostring(err))
             else
-                log.warn("sp_channels", "转发失败:", ch.name, err)
+                log.warn("sp_channels", "转发异常:", ch.name, tostring(sent_ok))
             end
         end
     end

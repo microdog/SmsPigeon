@@ -13,6 +13,7 @@
 - **IMEI 初始化**：首次使用必须 `信鸽，初始化，<IMEI>`，防误配防冒配；已初始化不可重复初始化
 - **防捡漏自毁**：检测到换卡、或连续第 3 次无卡开机，自动恢复出厂
 - **离线优先**：短信通道不依赖蜂窝数据网络，无流量也可转发
+- **远程发短信**：`信鸽，发送短信，<号码>，<内容>` 控制本机 SIM 卡向外发短信
 - **可扩展**：转发通道为插件式注册表，新通道=一个文件+一行注册
 - **状态灯**（整机开发板 NET 灯）：快闪=无网络、慢心跳=待初始化、常亮=正常、三连闪=收到短信
 
@@ -88,7 +89,7 @@ sp_config.lua             配置持久化（fskv）与恢复出厂
 sp_at.lua                 中文句子命令解析器+中文数字（纯逻辑）
 sp_auth.lua               鉴权状态机：初始化/白名单/密码（纯逻辑）
 sp_commands.lua           命令表与执行、应答文案
-sp_forward.lua            短信入口：命令分流 + 转发分发
+sp_forward.lua            短信接收入口：命令分流 + 转发分发
 sp_channels.lua           转发通道注册表与 HTTP 工具
 sp_chan_sms.lua           通道：短信转发
 sp_chan_dingtalk.lua      通道：钉钉 Webhook（加签）
@@ -98,7 +99,7 @@ sp_chan_wecom.lua          通道：企业微信（消息推送）
 sp_chan_wecom.lua          通道：企业微信（消息推送）
 sp_sim_guard.lua          换卡检测 + 无卡开机计数 + 自动复位
 sp_net.lua                联网状态 + NTP 对时（Webhook 加签依赖）
-sp_platform.lua           平台适配层（唯一接触硬件差异的模块）
+sp_platform.lua           平台适配层（硬件访问 + 短信发送出口）
 sp_led.lua                状态灯（整机开发板 NET 灯）
 test/                     单元测试（纯 Lua 5.3，含 LuatOS API 桩）
 docs/                     命令手册 / 代码地图 / agent 指南

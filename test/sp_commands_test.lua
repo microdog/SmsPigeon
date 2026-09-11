@@ -278,6 +278,37 @@ is_cmd, reply = send(ME, "信鸽，转发")
 contains(reply, "短信:开", "转发查询包含短信通道状态")
 
 --------------------------------------------------------------------------
+-- 远程发短信（控制本机向指定号码发送一条短信）
+--------------------------------------------------------------------------
+
+local sent_base = #MOCKS.sent
+is_cmd, reply = send(ME, "信鸽，发送短信，13800138000，测试内容")
+contains(reply, "OK", "远程发短信应答OK")
+contains(reply, "13800138000", "应答包含收件号码")
+MOCKS.tasks[#MOCKS.tasks]()
+eq(MOCKS.sent[#MOCKS.sent].num, "13800138000", "短信发往指定号码")
+contains(MOCKS.sent[#MOCKS.sent].text, "测试内容", "短信内容正确")
+
+-- 中文数字号码归一化 + 发短信 短语别名
+is_cmd, reply = send(ME, "信鸽，发短信，一三八〇〇一三八〇〇〇，内容二")
+contains(reply, "OK", "发短信别名可用")
+MOCKS.tasks[#MOCKS.tasks]()
+eq(MOCKS.sent[#MOCKS.sent].num, "13800138000", "中文数字号码归一化")
+
+-- 内容含逗号：拆分后用中文逗号拼回
+is_cmd, reply = send(ME, "信鸽，发送短信，10086，甲，乙")
+MOCKS.tasks[#MOCKS.tasks]()
+eq(MOCKS.sent[#MOCKS.sent].num, "10086", "短号码作为收件人")
+eq(MOCKS.sent[#MOCKS.sent].text, "甲，乙", "内容逗号按原样保留")
+
+-- 错误用法
+is_cmd, reply = send(ME, "信鸽，发送短信，123，内容")
+contains(reply, "ERROR", "过短号码报错")
+is_cmd, reply = send(ME, "信鸽，发送短信，13800138000")
+contains(reply, "ERROR", "缺少内容报错")
+eq(#MOCKS.sent - sent_base, 3, "错误用法不发送")
+
+--------------------------------------------------------------------------
 -- 转发分发集成（短信通道端到端）
 --------------------------------------------------------------------------
 
@@ -382,6 +413,19 @@ local out4 = MOCKS.sent[#MOCKS.sent]
 assert(not out4.text:find("设备:", 1, true), "关闭标识后转发文本不携带")
 n = n + 1
 send(ME, "信鸽，清除标识")
+
+-- 回归：短信通道失败路径不抛错且返回失败
+-- （曾因 failed 变量未声明，运行时错误被 dispatch 的 pcall 吞掉）
+local sms_ch = sp_channels.get("sms")
+local real_send = sms.send
+sms.send = function() return false end
+local pok, res = pcall(sms_ch.send,
+    { sender = "10086", text = "x", prefix = "", identity = "" },
+    { targets = { "13800138000" } })
+sms.send = real_send
+eq(pok, true, "失败路径不抛错")
+eq(res, false, "通道返回失败")
+n = n + 1
 
 --------------------------------------------------------------------------
 -- 重启与恢复出厂
