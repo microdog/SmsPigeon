@@ -90,11 +90,21 @@ local function on_sms(num, txt, metas)
     log.info("sp_forward", "收到短信", num, txt)
     if type(metas) == "table" then
         -- SCTS：短信中心下发时间。若与你发送时刻相差很大，
-        -- 说明短信在运营商侧滞留/延迟投递，不是固件问题
+        -- 说明短信在运营商侧滞留/延迟投递，不是固件问题。
+        -- 3GPP 时间戳年份为两位数（如 26 = 2026），补 2000 偏移
+        local y = tonumber(metas.year) or 0
+        if y < 100 then y = y + 2000 end
+        local tz = tonumber(metas.tz)
+        local tzstr = ""
+        if tz then
+            tzstr = string.format(" (UTC%s%02d:%02d)",
+                tz >= 0 and "+" or "-",
+                math.abs(tz) // 60, math.abs(tz) % 60)
+        end
         log.info("sp_forward", "短信中心时间戳",
-            string.format("%04d-%02d-%02d %02d:%02d:%02d",
-                metas.year or 0, metas.mon or 0, metas.day or 0,
-                metas.hour or 0, metas.min or 0, metas.sec or 0))
+            string.format("%04d-%02d-%02d %02d:%02d:%02d%s",
+                y, metas.mon or 0, metas.day or 0,
+                metas.hour or 0, metas.min or 0, metas.sec or 0, tzstr))
     end
     sp_led.blink()   -- 状态灯三连闪提示短信到达
     -- 1. 命令分流

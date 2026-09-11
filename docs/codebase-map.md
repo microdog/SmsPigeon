@@ -10,7 +10,7 @@
 |---|---|---|
 | `main.lua` | 入口：PROJECT/VERSION 与模块装配顺序（顺序有依赖，勿乱动） | `PROJECT` `VERSION` `sys.run` |
 | `sp_config.lua` | 配置缓存、fskv 读写、默认值合并、恢复出厂 | `get` `save` `save_iccid` `save_nosim` `factory_reset` `MAX_LIST` |
-| `sp_at.lua` | AT 风格命令解析（纯逻辑，无硬件依赖） | `parse(text, password)` `trim` |
+| `sp_at.lua` | AT 风格命令解析、鸽+前缀、全角归一（纯逻辑，无硬件依赖） | `parse(text, password)` `trim` |
 | `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块） | `imei` `iccid` `registered` `csq` `model` `reboot` `LED_GPIO` `LED_ACTIVE_HIGH` |
 | `sp_led.lua` | 状态灯（开发板 NET 灯）：网络/初始化指示与短信到达三连闪 | `pattern_for` `blink` |
 | `sp_commands.lua` | 命令表、执行、应答文案、未初始化/授权门禁 | `handle(sender, text)` `CH_ALIAS` `CMDS` |

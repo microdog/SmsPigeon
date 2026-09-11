@@ -57,6 +57,29 @@ eq(sp_at.parse("鸽子汤多少钱", ""), nil, "正常中文短信不误判")
 eq(sp_at.parse("鸽+汤", ""), nil, "前缀后必须接合法命令名")
 eq(sp_at.parse("鸽+", ""), nil, "+后无命令名")
 eq(sp_at.parse("鸽+ST?a", ""), nil, "命令名含非法字符")
+-- 全角归一（真机案例：中文输入法敲出 鸽+ST？ 全角问号）
+p = sp_at.parse("鸽+ST？", "")
+eq(p.cmd, "ST", "全角问号识别为查询")
+eq(p.op, "read", "全角问号操作为read")
+
+p = sp_at.parse("鸽＋ST?", "")
+eq(p.cmd, "ST", "全角加号识别")
+
+p = sp_at.parse("鸽＋ＳＴ？", "")
+eq(p.cmd, "ST", "全角加号+全角命令名+全角问号")
+
+p = sp_at.parse("鸽+WL＝ON", "")
+eq(p.op, "write", "全角等号识别为设置")
+eq(p.args[1], "ON", "全角等号参数正常")
+
+p = sp_at.parse("鸽+FWD=SMS,ADD，13800138000", "")
+eq(#p.args, 3, "全角逗号按分隔符拆分")
+eq(p.args[3], "13800138000", "全角逗号参数内容正确")
+
+p = sp_at.parse("８８８８+ST?", "8888")
+eq(p.cmd, "ST", "全角数字密码匹配")
+eq(p.via_password, true, "全角数字密码via_password")
+
 eq(sp_at.parse("", ""), nil, "空串")
 eq(sp_at.parse(nil, ""), nil, "nil输入")
 

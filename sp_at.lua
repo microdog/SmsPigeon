@@ -34,6 +34,17 @@ local sp_at = {}
 -- 默认命令前缀（UTF-8 多字节，#取得字节数，sub 按字节切分同样正确）
 local PREFIX = "鸽"
 
+--[[
+全角 ASCII（！～，U+FF01-FF5E）转半角。
+中文输入法在"鸽"前缀场景下常敲出全角符号（？＝＋，）与全角数字/字母，
+统一归一后再解析。UTF-8 编码：U+FF01-FF5E = EF BC 81-DE，映射为原码减 0x60。
+]]
+local function to_halfwidth(s)
+    return (s:gsub("\239\188([\129-\222])", function(c)
+        return string.char(string.byte(c) - 96)
+    end))
+end
+
 -- 去除首尾空白字符（空格/制表符/回车/换行/全角空格）
 function sp_at.trim(s)
     return (s:gsub("^[ \t\r\n　]+", ""):gsub("[ \t\r\n　]+$", ""))
@@ -50,7 +61,8 @@ end
 ]]
 function sp_at.parse(text, password)
     if type(text) ~= "string" then return nil end
-    local s = sp_at.trim(text)
+    -- 全角归一后再剔除空白：鸽+ST？ / 鸽＋ST? / 鸽＋ＳＴ？ 等写法均可识别
+    local s = sp_at.trim(to_halfwidth(text))
     if s == "" then return nil end
 
     local rest         -- 前缀之后的部分
