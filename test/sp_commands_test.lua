@@ -242,9 +242,12 @@ eq(ding.on, true, "设置后自动开启")
 is_cmd, reply = send(ME, "信鸽，设置钉钉，ftp://bad")
 contains(reply, "ERROR", "非法URL报错")
 
-is_cmd, reply = send(ME, "信鸽，设置Server酱，SCT1234ABCD")
+is_cmd, reply = send(ME, "信鸽，设置Server酱，SCT1234ABCD5678EFG")
 contains(reply, "OK", "配置Server酱SendKey")
-eq(sp_config.get().fwd.serverchan.sendkey, "SCT1234ABCD", "SendKey保存")
+eq(sp_config.get().fwd.serverchan.sendkey, "SCT1234ABCD5678EFG", "SendKey保存")
+
+is_cmd, reply = send(ME, "信鸽，设置Server酱，SCT123")
+contains(reply, "ERROR", "短SendKey被拒绝(L3)")
 
 is_cmd, reply = send(ME, "信鸽，设置Server酱，https://sc3.example.com/send/xxx.send")
 contains(reply, "OK", "Server酱支持完整URL")

@@ -506,8 +506,9 @@ end
 local function cmd_sc_set(cfg, args, sender)
     local k = args[1] or ""
     if k == "" then return "ERROR:缺少 SendKey" end
-    -- 接受 SendKey（字母数字）或完整推送 URL
-    if not (url_valid(k) or k:match("^[%w%-]+$")) then
+    -- 接受 SendKey（字母数字，真实 SendKey 为 SCT+长串，≥16 与其它
+    -- 通道 token 一致——短 key 必为误输，配了也必然推送失败）或完整 URL
+    if not (url_valid(k) or (k:match("^[%w%-]+$") and #k >= 16)) then
         return "ERROR:SendKey 无效"
     end
     local chcfg = cfg.fwd.serverchan
