@@ -39,7 +39,7 @@
 | `test/sp_commands_test.lua` | 初始化/门禁/白名单/密码/通道命令全流程、AND 语义、防锁死 |
 | `test/sp_call_test.lua` | 来电提醒：CC_IND 驱动、响铃去重、开关往返、未知号码 |
 | `test/sp_forward_test.lua` | 转发管线：统计四路计数、过滤、验证码提取、暂存/重发/一次性 |
-| `test/sp_heartbeat_test.lua` | 心跳布防/撤防、中文数字间隔、到期推送、非法值拒绝 |
+| `test/sp_heartbeat_test.lua` | 心跳布防/撤防、到期推送、非法值与中文数量词拒绝 |
 | `test/sp_net_test.lua` | 断网自愈：6 次阈值触发、恢复清零、无上限持续自愈 |
 | `test/sp_sim_guard_test.lua` | ICCID 绑定、换卡复位、无卡计数 |
 | `test/main_smoke_test.lua` | main.lua 全链路装配、回调贯通、未初始化死寂 |

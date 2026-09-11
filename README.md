@@ -181,7 +181,36 @@ SIM 事件时序、CC_IND 来电事件）无法在纯 Lua 环境模拟，以下�
 11. 拔卡连续 3 次开机后复位（日志 `连续第 3 次无卡开机`）；
 12. 状态灯：未初始化慢心跳、初始化后常亮、收到短信三连闪、拔卡后快闪。
 
-## 常见问题：发命令没反应 / 收不到转发
+### 添加新转发通道
+
+1. 新建 `sp_chan_xxx.lua`，实现并注册通道接口：
+
+   ```lua
+   local sp_channels = require "sp_channels"
+   sp_channels.register {
+       key = "xxx",          -- 与 sp_config.defaults().fwd 中的键一致
+       name = "某平台",
+       needs_net = true,     -- HTTP 类通道为 true
+       is_configured = function(chcfg) ... end,   -- 配置是否完整
+      send = function(msg, chcfg) ... end,        -- 返回 true 才算成功；false/nil 均为失败(可带原因)
+   }
+   ```
+
+2. 在 `sp_config.defaults().fwd` 增加 `xxx` 默认配置结构；
+3. 在 `sp_commands.lua` 的 `CH_ALIAS` 增加命令别名（如 `XX`）；
+4. `main.lua` 增加 `require "sp_chan_xxx"`。
+
+### 移植到其它 LuatOS 模组
+
+业务模块只通过 `sp_platform.lua` 访问硬件差异 API（IMEI/ICCID/信号/重启），
+其余 LuatOS API（sms/fskv/http/crypto）在 Air780E 系列上通用。
+移植 Air780EPM/EHM/EGH 等型号通常只需确认 fskv 分区可用、
+`rtos.bsp()` 返回值，必要时在 `sp_platform.lua` 内做适配。
+
+
+## 常见问题
+
+### 发命令没反应 / 收不到转发
 
 1. **先看日志有没有"收到短信"**：固件对每条到达的短信（无论是否命令）
    都会先打印 `I/user.sp_forward 收到短信 <号码> 长度 <字节数>`（出于
@@ -241,32 +270,6 @@ AT+CCFC），而 Air780EHV 的 LuatOS 固件不暴露 USSD/CCFC 接口
   的手机，提醒与接听两全；
 - **无条件转移** `**21*<你的手机号>#`：来电直接转走，模块侧收不到
   来电事件，**来电提醒不会触发**（短信转发不受影响）。
-
-### 添加新转发通道
-
-1. 新建 `sp_chan_xxx.lua`，实现并注册通道接口：
-
-   ```lua
-   local sp_channels = require "sp_channels"
-   sp_channels.register {
-       key = "xxx",          -- 与 sp_config.defaults().fwd 中的键一致
-       name = "某平台",
-       needs_net = true,     -- HTTP 类通道为 true
-       is_configured = function(chcfg) ... end,   -- 配置是否完整
-      send = function(msg, chcfg) ... end,        -- 返回 true 才算成功；false/nil 均为失败(可带原因)
-   }
-   ```
-
-2. 在 `sp_config.defaults().fwd` 增加 `xxx` 默认配置结构；
-3. 在 `sp_commands.lua` 的 `CH_ALIAS` 增加命令别名（如 `XX`）；
-4. `main.lua` 增加 `require "sp_chan_xxx"`。
-
-### 移植到其它 LuatOS 模组
-
-业务模块只通过 `sp_platform.lua` 访问硬件差异 API（IMEI/ICCID/信号/重启），
-其余 LuatOS API（sms/fskv/http/crypto）在 Air780E 系列上通用。
-移植 Air780EPM/EHM/EGH 等型号通常只需确认 fskv 分区可用、
-`rtos.bsp()` 返回值，必要时在 `sp_platform.lua` 内做适配。
 
 ## 文档索引
 
