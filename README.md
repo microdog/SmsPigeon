@@ -63,7 +63,7 @@
 多设备转发到同一群时可用 `信鸽，设置标识，<文本>` 区分来源
 （默认自动取 SIM 本机号码尾 4 位，物联网卡未写号码则不携带）。
 
-钉钉/飞书/Server酱通道的配置示例、命令细节与鉴权规则见
+钉钉/飞书/Server酱/企业微信通道的配置示例、命令细节与鉴权规则见
 **[docs/commands.md](docs/commands.md)**。
 
 ## 工作原理
@@ -78,7 +78,8 @@
                            ▼                    ├─▶ 短信通道（离线）
                   sp_commands 命令处理           ├─▶ 钉钉 Webhook
                   （鉴权→执行→短信应答）          ├─▶ 飞书 Webhook
-                                                └─▶ Server酱
+                                                ├─▶ Server酱
+                                                └─▶ 企业微信（消息推送）
 ```
 
 - 未初始化：不转发任何短信，只接受 `信鸽，初始化`，其余静默丢弃；
@@ -99,7 +100,6 @@ sp_chan_sms.lua           通道：短信转发
 sp_chan_dingtalk.lua      通道：钉钉 Webhook（加签）
 sp_chan_feishu.lua        通道：飞书 Webhook（签名）
 sp_chan_serverchan.lua    通道：Server酱
-sp_chan_wecom.lua          通道：企业微信（消息推送）
 sp_chan_wecom.lua          通道：企业微信（消息推送）
 sp_sim_guard.lua          换卡检测 + 无卡开机计数 + 自动复位
 sp_net.lua                联网状态 + NTP 对时（Webhook 加签依赖）
