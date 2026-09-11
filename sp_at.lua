@@ -69,9 +69,11 @@ local function to_halfwidth(s)
     end))
 end
 
--- 文本归一：全角转半角 + 顿号/句号归一为逗号 + 首尾空白剔除
+-- 文本归一：全角转半角 + 全角空格转半角（U+3000 可作分隔符）+
+-- 顿号/句号归一为逗号 + 首尾空白剔除
 local function normalize(s)
     s = to_halfwidth(s)
+    s = s:gsub("　", " ")
     s = s:gsub("、", ","):gsub("。", ",")
     return sp_at.trim(s)
 end
