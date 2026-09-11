@@ -1,0 +1,15 @@
+# 构建产物 / 工具缓存
+.luatools/
+*.soc
+*.pkg
+*.bin
+*.dump
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 系统文件
+Thumbs.db
+.DS_Store
