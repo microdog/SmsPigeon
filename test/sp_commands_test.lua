@@ -473,6 +473,121 @@ eq(type(dres2._test_nil_ch), "string", "nil+err返回被记为失败(字符串�
 contains(dres2._test_nil_ch, "接口限流", "失败原因透传")
 
 --------------------------------------------------------------------------
+-- 配置导出/导入（命令回放）
+--------------------------------------------------------------------------
+
+-- 铺设可辨识的配置面
+send(ME, "信鸽，拉黑，10699901")
+send(ME, "信鸽，添加过滤词，发票，贷款")
+send(ME, "信鸽，设置心跳，24")
+send(ME, "信鸽，关闭来电提醒")
+send(ME, "信鸽，设置前缀，【鸽】")
+send(ME, "信鸽，设置标识，鸽1号")
+send(ME, "信鸽，设置钉钉，03f4753ea97855f4d1b2c3d5e6f7a8b9c，SEC0123456789abcdef")
+send(ME, "信鸽，增加转发号码，13666667777")
+send(ME, "信鸽，开启短信转发")
+is_cmd, reply = send(ME, "信鸽，帮助")
+contains(reply, "信鸽，导出配置", "帮助包含导出配置用法")
+
+is_cmd, reply = send(ME, "信鸽，导出配置")
+eq(is_cmd, true, "导出是命令")
+eq(reply:match("^[^\n]+"), "信鸽，导入配置", "导出首行为导入包装命令(可原样转发)")
+contains(reply, "\n开启白名单", "白名单开关总是显式")
+contains(reply, "增加白名单，13800138000", "导出含机主白名单")
+contains(reply, "拉黑，10699901", "导出含黑名单")
+contains(reply, "添加过滤词，发票，贷款", "导出含过滤词")
+contains(reply, "设置心跳，24", "导出含心跳")
+contains(reply, "关闭来电提醒", "导出非默认来电提醒")
+contains(reply, "设置前缀，【鸽】", "导出含前缀")
+contains(reply, "设置标识，鸽1号", "导出含标识")
+contains(reply, "设置钉钉，03f4753ea97855f4d1b2c3d5e6f7a8b9c，SEC0123456789abcdef", "钉钉导出纯token形式")
+contains(reply, "增加转发号码，13666667777", "导出含转发目标")
+contains(reply, "开启短信转发", "导出短信通道开启态")
+contains(reply, "#SmsPigeon", "导出带尾注标记")
+local blob = reply
+
+-- roundtrip：恢复出厂 → 重新初始化 → 整条导出内容作为一条短信导入
+send(ME, "信鸽，恢复出厂")
+send(ME, "信鸽，初始化，" .. MOCKS.mobile.imei)
+is_cmd, reply = send(ME, blob)
+eq(is_cmd, true, "导入短信按命令处理")
+contains(reply, "OK:导入完成", "导入返回汇总应答")
+contains(reply, "跳过1", "机主号码已在白名单按跳过计")
+local cfg2 = sp_config.get()
+eq(cfg2.initialized, true, "导入后保持已初始化")
+eq(cfg2.password, "", "密码不随导出")
+eq(cfg2.whitelist[1], "13800138000", "白名单机主保留")
+eq(cfg2.blocklist[1], "10699901", "黑名单已导入")
+eq(cfg2.kwords[1], "发票", "过滤词已导入")
+eq(cfg2.kwords[2], "贷款", "过滤词完整导入")
+eq(cfg2.hb_hours, 24, "心跳已导入")
+eq(cfg2.call_notify, false, "来电提醒关闭态已导入")
+eq(cfg2.prefix, "【鸽】", "前缀已导入")
+eq(cfg2.identity, "鸽1号", "标识已导入")
+eq(cfg2.fwd.dingtalk.url,
+    "https://oapi.dingtalk.com/robot/send?access_token=03f4753ea97855f4d1b2c3d5e6f7a8b9c",
+    "钉钉URL由token重建")
+eq(cfg2.fwd.dingtalk.secret, "SEC0123456789abcdef", "钉钉加签密钥已导入")
+eq(cfg2.fwd.dingtalk.on, true, "钉钉设置即开启")
+local tgt_ok = false
+for _, t in ipairs(cfg2.fwd.sms.targets) do
+    if t == "13666667777" then tgt_ok = true end
+end
+eq(tgt_ok, true, "转发目标已导入")
+eq(cfg2.fwd.sms.on, true, "短信通道开启态已导入")
+eq(cfg2.code_pick, true, "默认态未导出,保持默认开")
+
+-- 幂等重导：不产生重复项
+local wl_n, blk_n = #cfg2.whitelist, #cfg2.blocklist
+is_cmd, reply = send(ME, blob)
+contains(reply, "OK:导入完成", "重导仍是合法命令")
+eq(#sp_config.get().whitelist, wl_n, "重导白名单不重复")
+eq(#sp_config.get().blocklist, blk_n, "重导黑名单不重复")
+
+-- 允许清单：生命周期/动作/查询命令不可导入
+local reboots_before = MOCKS.reboots
+is_cmd, reply = send(ME, "信鸽，导入配置\n恢复出厂\n重启\n发送短信，10086，x\n重发\n导出配置\n导入配置\n状态")
+contains(reply, "失败7", "七条禁入命令全部计失败")
+eq(sp_config.get().initialized, true, "恢复出厂未被执行")
+eq(MOCKS.reboots, reboots_before, "重启未被执行")
+
+-- 行数上限：第 51 行触发封顶
+local many = {}
+for i = 1, 51 do many[i] = "设置标识，鸽" end
+is_cmd, reply = send(ME, "信鸽，导入配置\n" .. table.concat(many, "\n"))
+contains(reply, "成功50", "前 50 行正常执行")
+contains(reply, "失败1", "超限计 1 条失败")
+contains(reply, "超出50行上限", "失败原因明示上限")
+send(ME, "信鸽，清除标识")
+
+-- 空导入
+is_cmd, reply = send(ME, "信鸽，导入配置")
+contains(reply, "ERROR:导入内容为空", "无命令行时报空")
+
+-- 注释行与空行
+is_cmd, reply = send(ME, "信鸽，导入配置\n\n#导出于测试机\n拉黑，10655588")
+contains(reply, "成功1", "注释与空行不计入")
+eq(sp_config.get().blocklist[#sp_config.get().blocklist], "10655588", "注释后命令行仍执行")
+
+-- 密码不导出；密码模式下导入（包装行带密码前缀，行内容裸）
+send(ME, "信鸽，设置密码，8888")
+is_cmd, reply = send(ME, "8888，导出配置")
+assert(not reply:find("8888", 1, true), "密码不出现在导出内容")
+n = n + 1
+is_cmd, reply = send(ME, "8888，导入配置\n拉黑，10677700")
+contains(reply, "成功1", "密码模式下导入成功")
+eq(sp_config.get().blocklist[#sp_config.get().blocklist], "10677700", "密码模式导入生效")
+-- 密码机上收默认前缀 blob：不是命令（防泄漏闸行为在 sp_forward 测试覆盖）
+is_cmd, reply = send(ME, blob)
+eq(is_cmd, false, "密码机上默认前缀blob按普通短信处理")
+send(ME, "8888，清除密码")
+
+-- 行自带 信鸽 前缀的容错（手工粘贴场景）
+is_cmd, reply = send(ME, "信鸽，导入配置\n信鸽，拉黑，10633300")
+contains(reply, "成功1", "自带前缀的行可导入")
+eq(sp_config.get().blocklist[#sp_config.get().blocklist], "10633300", "自带前缀行生效")
+
+--------------------------------------------------------------------------
 -- 重启与恢复出厂
 --------------------------------------------------------------------------
 

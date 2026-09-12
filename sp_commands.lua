@@ -1,7 +1,7 @@
 --[[
 @module  sp_commands
 @summary SmsPigeon 短信命令处理模块（中文句子命令表 + 执行 + 应答文案）
-@version 2.3
+@version 2.4
 @date    2026.09.12
 @usage
 命令总览（详见 docs/commands.md，全部以"信鸽"为前缀）：
@@ -25,8 +25,8 @@
   信鸽，设置飞书，<webhook或hook>[，<签名密钥>]
   信鸽，设置Server酱，<SendKey或URL>
   信鸽，设置企业微信，<key或webhook>
-  信鸽，恢复出厂
-  信鸽，重启
+  信鸽，导出配置               导出全部配置为一条可转发的导入短信（密码不随导出）
+  信鸽，导入配置               首行之后每行一条命令，批量导入（合并语义）
 
 号码与 IMEI 支持中文数字（一三二六二五七五七一八）与分组写法（132-6257-5718）。
 鉴权流程见 sp_auth；应答统一通过短信回复给命令发送者。
@@ -760,6 +760,170 @@ local function cmd_reboot(cfg, args, sender)
 end
 
 --------------------------------------------------------------------------
+-- 配置导出/导入：命令回放格式
+-- 导出应答 = 一条可直接原样转发的短信：首行 信鸽，导入配置，其后每行
+-- 一条命令，尾行 # 注释。导入逐行执行"允许清单"内的命令，合并语义
+-- （不清空目标机配置，重复项按跳过计，重发幂等）。
+-- 密码不随导出（导出内容驻留管理员收件箱，密码=完全控制权）；
+-- ICCID 绑定/无卡计数/防环标记/统计/失败暂存为设备私有状态，同样不导出。
+--------------------------------------------------------------------------
+
+-- 允许导入的命令（允许清单，默认拒绝）：与导出可重建的配置面一致，
+-- 外加删除/清空类（手工编写的迁移 blob 可做减法）。生命周期与动作类
+-- 命令（初始化/恢复出厂/重启/发送短信/重发/导出/导入自身/查询统计）
+-- 一律不可导入；未来新增命令默认不可导入，需显式登记。
+local IMPORT_OK = {
+    WL_ON = true, WL_OFF = true, WL_ADD = true, WL_DEL = true,
+    PREFIX_SET = true, PREFIX_CLR = true,
+    IDENT_SET = true, IDENT_OFF = true, IDENT_AUTO = true,
+    FWD_SMS_ADD = true, FWD_SMS_DEL = true,
+    CH_ON = true, CH_OFF = true, CH_CLR = true,
+    DING_SET = true, FS_SET = true, SC_SET = true, WECOM_SET = true,
+    CALLN_ON = true, CALLN_OFF = true,
+    HB_SET = true, HB_OFF = true,
+    BLK_ADD = true, BLK_DEL = true,
+    KW_ADD = true, KW_DEL = true,
+    CODEP_ON = true, CODEP_OFF = true,
+}
+
+-- 导入行数上限（最坏配置 ~40 行：白名单/转发/拉黑各 10 + 通道 + 杂项）
+local IMPORT_MAX = 50
+
+-- 合并语义下的良性重复（重导幂等）：目标机已有同项
+local function benign_dup(reply)
+    return reply:find("已在白名单", 1, true) ~= nil
+        or reply:find("已在转发列表", 1, true) ~= nil
+        or reply:find("已在黑名单", 1, true) ~= nil
+end
+
+-- CMD_MAP 前置声明（导入执行器运行期查表，注册表在文件后段填充）
+local CMD_MAP = {}
+
+-- webhook URL → 纯 token（导出用：出站短信避免 URL 特征被运营商过滤，
+-- 重新导入时由命令层拼回标准地址）
+local function web_token(url, pat)
+    if not url or url == "" then return nil end
+    return url:match(pat)
+end
+
+local function cmd_export(cfg, args, sender)
+    local L = {}
+    local function add(line) L[#L + 1] = line end
+    -- 白名单开关总是显式（安全态必须随克隆走）；其余非默认态才导出，
+    -- 默认态交给目标机默认值（前向兼容：默认值改进不影响旧导出）
+    add(cfg.wl_on and "开启白名单" or "关闭白名单")
+    for _, num in ipairs(cfg.whitelist) do add("增加白名单，" .. num) end
+    if cfg.prefix ~= "" then add("设置前缀，" .. cfg.prefix) end
+    if cfg.identity == nil then
+        -- 自动模式 = 默认，不导出
+    elseif cfg.identity == "" then
+        add("关闭标识")
+    else
+        add("设置标识，" .. cfg.identity)
+    end
+    local sms = cfg.fwd.sms
+    for _, num in ipairs(sms.targets or {}) do add("增加转发号码，" .. num) end
+    if sms.on and #(sms.targets or {}) > 0 then add("开启短信转发") end
+    local dd = cfg.fwd.dingtalk
+    if dd.url ~= "" then
+        add("设置钉钉，" .. (web_token(dd.url, "access_token=([%w%-]+)") or dd.url)
+            .. (dd.secret ~= "" and ("，" .. dd.secret) or ""))
+        if not dd.on then add("关闭钉钉") end
+    end
+    local fs = cfg.fwd.feishu
+    if fs.url ~= "" then
+        add("设置飞书，" .. (web_token(fs.url, "/hook/([%w%-]+)") or fs.url)
+            .. (fs.secret ~= "" and ("，" .. fs.secret) or ""))
+        if not fs.on then add("关闭飞书") end
+    end
+    local sc = cfg.fwd.serverchan
+    if sc.sendkey ~= "" then
+        local k = sc.sendkey
+        if k:sub(1, 4):lower() == "http" then
+            k = k:match("/send/([%w%-]+)%.send$") or k   -- URL 形式尽量还原 SendKey
+        end
+        add("设置Server酱，" .. k)
+        if not sc.on then add("关闭Server酱") end
+    end
+    local wc = cfg.fwd.wecom
+    if wc.key ~= "" then
+        add("设置企业微信，" .. wc.key)
+        if not wc.on then add("关闭企业微信") end
+    end
+    if cfg.call_notify == false then add("关闭来电提醒") end
+    if (cfg.hb_hours or 0) > 0 then add("设置心跳，" .. cfg.hb_hours) end
+    for _, num in ipairs(cfg.blocklist) do add("拉黑，" .. num) end
+    if #(cfg.kwords or {}) > 0 then add("添加过滤词，" .. table.concat(cfg.kwords, "，")) end
+    if cfg.code_pick == false then add("关闭验证码") end
+    return "信鸽，导入配置\n" .. table.concat(L, "\n")
+        .. "\n#SmsPigeon " .. tostring(VERSION or "?") .. " 共" .. #L
+        .. "条,密码不随导出,原样转发即可导入"
+end
+
+-- 导入执行（handle 中特判调用，text 为整条短信原文）：
+-- 鉴权已在包装短信上完成一次，行内容不再重复鉴权
+local function cmd_import(cfg, text, sender)
+    local eff = (cfg.password ~= "" and cfg.password or "信鸽")
+    local okc, skip, fail, total = 0, 0, 0, 0
+    local fails = {}
+    local first = true
+    for line in text:gmatch("[^\r\n]+") do
+        if first then
+            first = false                      -- 首行 = 导入包装命令本身
+        else
+            local ln = sp_at.trim(line)
+            if ln ~= "" and ln:sub(1, 1) ~= "#" then
+                total = total + 1
+                if total > IMPORT_MAX then
+                    fail = fail + 1
+                    fails[#fails + 1] = "超出" .. IMPORT_MAX .. "行上限"
+                    break
+                end
+                -- 前置有效前缀后复用完整解析器（归一/短语匹配/参数拆分
+                -- 全部一致）；行自带 信鸽/密码 前缀时按原行解析（手工粘贴容错）
+                local p = sp_at.parse(eff .. "，" .. ln, cfg.password)
+                if p == nil or p.cmd == nil then
+                    p = sp_at.parse(ln, cfg.password)
+                end
+                if p == nil or p.cmd == nil then
+                    fail = fail + 1
+                    fails[#fails + 1] = ln:sub(1, 10) .. " 非命令"
+                elseif not IMPORT_OK[p.cmd] or not CMD_MAP[p.cmd] then
+                    fail = fail + 1
+                    fails[#fails + 1] = ln:sub(1, 10) .. " 不允许导入"
+                else
+                    local rok, r = pcall(CMD_MAP[p.cmd].run, cfg, p.args, sender)
+                    if not rok then
+                        fail = fail + 1
+                        fails[#fails + 1] = ln:sub(1, 10) .. " 执行出错"
+                    elseif type(r) == "string" and r:sub(1, 5) == "ERROR" then
+                        if benign_dup(r) then
+                            skip = skip + 1
+                        else
+                            fail = fail + 1
+                            fails[#fails + 1] = ln:sub(1, 10) .. " " .. r:gsub("^ERROR:?", "")
+                        end
+                    else
+                        okc = okc + 1
+                    end
+                end
+            end
+        end
+    end
+    if total == 0 then
+        return "ERROR:导入内容为空,首行 信鸽，导入配置,其后每行一条命令"
+    end
+    local out = "OK:导入完成 成功" .. okc .. " 跳过" .. skip
+    if fail > 0 then
+        local shown = {}
+        for i = 1, math.min(#fails, 3) do shown[#shown + 1] = fails[i] end
+        if #fails > 3 then shown[#shown + 1] = "……(共" .. fail .. "条失败)" end
+        out = out .. " 失败" .. fail .. "\n" .. table.concat(shown, "\n")
+    end
+    return out
+end
+
+--------------------------------------------------------------------------
 -- 命令注册表
 --------------------------------------------------------------------------
 
@@ -825,13 +989,27 @@ CMDS = {
     { cmd = "FS_SET",     usage = "信鸽，设置飞书，<webhook或hook>[，<签名密钥>]", run = make_web_set("feishu") },
     { cmd = "SC_SET",     usage = "信鸽，设置Server酱，<SendKey>", run = cmd_sc_set },
     { cmd = "WECOM_SET",  usage = "信鸽，设置企业微信，<key或webhook>", run = cmd_wecom_set },
+    { cmd = "EXPORT",     usage = "信鸽，导出配置",               run = cmd_export },
+    { cmd = "IMPORT",     usage = "信鸽，导入配置(每行一条命令)",  run = cmd_import },
     { cmd = "RESET",      usage = "信鸽，恢复出厂",             run = cmd_reset },
     { cmd = "DBG",       usage = "信鸽，调试，[开/关]",          run = cmd_dbg },
     { cmd = "REBOOT",     usage = "信鸽，重启",                 run = cmd_reboot },
 }
 
-local CMD_MAP = {}
 for _, e in ipairs(CMDS) do CMD_MAP[e.cmd] = e end
+
+--[[
+疑似配置导入内容（sp_forward 防泄漏闸用）：正文首行含 "，导入配置"
+（手机转发预加"转发："前缀、密码模式机收到默认前缀 blob 等命令解析
+失败的情形），或正文携带 #SmsPigeon 导出尾注。命中则绝不进入转发
+通道（webhook token 与白名单不得外泄），由调用方决定回提示或静默。
+]]
+function sp_commands.is_import_blob(text)
+    if type(text) ~= "string" then return false end
+    if text:find("#SmsPigeon", 1, true) then return true end
+    local first = text:match("^[^\r\n]*") or ""
+    return first:find("，导入配置", 1, true) ~= nil
+end
 
 --------------------------------------------------------------------------
 -- 命令入口
@@ -864,6 +1042,17 @@ function sp_commands.handle(sender, text)
             log.warn("sp_commands", "拒绝未授权命令", sender, tostring(p.cmd))
             return true, nil, nil
         end
+    end
+
+    -- 导入：整条短信 = 包装命令 + 逐行命令回放。行内容不重复鉴权
+    -- （三重门禁已在包装短信上完成），仅执行允许清单内的命令
+    if p.cmd == "IMPORT" then
+        local iok, reply = pcall(cmd_import, cfg, text, sender)
+        if not iok then
+            log.error("sp_commands", "导入执行出错", tostring(reply))
+            return true, "错误:导入执行出错", nil
+        end
+        return true, reply, nil
     end
 
     local entry = CMD_MAP[p.cmd]

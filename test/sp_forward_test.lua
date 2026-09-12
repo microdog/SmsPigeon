@@ -213,4 +213,43 @@ eq(st.dropped, 0, "清零:丢弃")
 -- 重启后暂存仍在（fskv 持久）：直接读 store 键断言
 eq(type(MOCKS.store["sp_retry"]), "table", "暂存队列经 fskv 持久化")
 
+--------------------------------------------------------------------
+-- 导入内容防泄漏闸：疑似配置 blob 不进入转发通道（token/白名单外泄防护）
+--------------------------------------------------------------------
+local g0 = sp_forward.stats().sent
+sent_base = #MOCKS.sent
+MOCKS.sms_cb(ADMIN, "转发：信鸽，导入配置\n增加白名单，13800138000\n设置钉钉，03f4753ea97855f4")
+run_tasks()
+eq(sp_forward.stats().sent, g0, "闸:blob不入转发队列")
+eq(#MOCKS.sent, sent_base + 1, "闸:授权发送者收到格式提示")
+eq(last_sent().num, ADMIN, "闸:提示只回发送者本人")
+assert(last_sent().text:find("ERROR:导入格式错误", 1, true), "闸:提示文案")
+n = n + 1
+sent_base = #MOCKS.sent
+
+-- 未授权发送者的 blob：静默（无回复、无转发，防探测）
+MOCKS.sms_cb("10086", "转发：信鸽，导入配置\n增加白名单，13800138000")
+run_tasks()
+eq(#MOCKS.sent, sent_base, "闸:未授权无应答")
+eq(sp_forward.stats().sent, g0, "闸:未授权无转发")
+
+-- #SmsPigeon 尾注信号（中段截断只剩尾行的 blob 也能识别）
+MOCKS.sms_cb("10086", "月底账单已出\n#SmsPigeon 1.3.0 共8条,密码不随导出")
+run_tasks()
+eq(sp_forward.stats().sent, g0, "闸:尾注标记触发不转发")
+
+-- 对照组：正常短信不受闸影响
+MOCKS.sms_cb("10086", "普通短信对照组")
+run_tasks()
+eq(sp_forward.stats().sent, g0 + 1, "对照:正常短信仍转发")
+
+-- 首行干净的正常导入走命令路径，收到汇总应答
+MOCKS.sms_cb(ADMIN, "信鸽，导入配置\n拉黑，10612345")
+run_tasks()
+assert(last_sent().text:find("OK:导入完成", 1, true), "正常导入得到汇总应答")
+n = n + 1
+eq(sp_config.get().blocklist[1], "10612345", "导入行已执行")
+MOCKS.sms_cb(ADMIN, "信鸽，取消拉黑，10612345")
+run_tasks()
+
 print(string.format("PASS sp_forward_test (%d assertions)", n))

@@ -29,7 +29,7 @@ dofile(dir .. "/../main.lua")
 
 eq(type(MOCKS.sms_cb), "function", "main装配后短信回调已注册")
 eq(PROJECT, "SmsPigeon", "PROJECT全局变量")
-eq(VERSION, "1.2.0", "VERSION全局变量")
+eq(VERSION, "1.3.0", "VERSION全局变量")
 
 -- 状态灯模块：模式决策纯函数 + 活动闪烁接口
 local sp_led = require "sp_led"

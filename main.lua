@@ -1,8 +1,8 @@
 --[[
 @module  main
 @summary SmsPigeon 固件入口（LuatOS 用户应用脚本）
-@version 1.2.0
-@date    2026.09.11
+@version 1.3.0
+@date    2026.09.12
 @usage
 SmsPigeon（短信鸽）：全本地运行的 Air780EHV 短信转发固件。
 配置与控制全部通过短信命令完成，固件自身不连接任何远程管理 API。
@@ -32,7 +32,7 @@ SmsPigeon（短信鸽）：全本地运行的 Air780EHV 短信转发固件。
 
 -- Luatools 工具与远程升级依赖的项目级全局变量
 PROJECT = "SmsPigeon"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 local sys = require "sys"
 log.info("main", PROJECT, VERSION)

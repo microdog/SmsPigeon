@@ -14,8 +14,8 @@
 | `sp_at.lua` | 中文句子命令解析：信鸽前缀、短语最长匹配、全角/顿号句号归一、中文数字（纯逻辑） | `parse(text, password)` `digits` `cn_digits` `trim` |
 | `sp_platform.lua` | 硬件适配层（唯一触碰 `mobile`/`rtos` 的模块）+ 短信发送出口（互斥串行） | `imei` `iccid` `msisdn` `registered` `csq` `send_sms` `send_sms_sync` `set_sms_debug` `rand_hex8` `reboot` |
 | `sp_led.lua` | 状态灯（开发板 NET 灯）：网络/初始化指示与短信到达三连闪 | `pattern_for` `blink` |
-| `sp_commands.lua` | 命令表（中文命令标识）、执行、应答文案、未初始化/授权门禁 | `handle(sender, text)` `CH_ALIAS` `CMDS` |
-| `sp_forward.lua` | 短信接收入口：命令分流/回环丢弃/黑名单与过滤词/单 worker 有界队列/四路计数/失败暂存重发（IP_READY 排空） | `stats` `reset_stats` `notify_call` `notify_hb` `retry_now` |
+| `sp_commands.lua` | 命令表（中文命令标识）、执行、应答文案、未初始化/授权门禁、配置导出/导入（命令回放，允许清单） | `handle(sender, text)` `is_import_blob` `CH_ALIAS` `CMDS` |
+| `sp_forward.lua` | 短信接收入口：命令分流/回环丢弃/黑名单与过滤词/导入 blob 防泄漏闸/单 worker 有界队列/四路计数/失败暂存重发（IP_READY 排空） | `stats` `reset_stats` `notify_call` `notify_hb` `retry_now` |
 | `sp_call.lua` | 来电提醒：CC_IND 监听、同一通去重、来电号码入转发队列（不接听不挂断） | `sys.subscribe("CC_IND")`（加载期） |
 | `sp_heartbeat.lua` | 心跳报平安：按 hb_hours 布防循环定时器，到期推送在线摘要（默认关） | `restart` `valid_hours` |
 | `sp_channels.lua` | 通道注册表 + HTTP/表单/联网等待工具 | `register` `dispatch` `keys` `wait_net` `http_post_json` `format_text` |
@@ -51,7 +51,9 @@
 - **配置持久化**：全部经 `sp_config`；fskv 键见该文件顶部 `sp_*` 常量；
   `RESET`/换卡/无卡复位共用 `factory_reset`
 - **收到一条短信后发生什么**：`sp_forward.on_sms` → 命令？
-  `sp_commands.handle` 应答；否则（已初始化）`sp_channels.dispatch` 分发
+  `sp_commands.handle` 应答（导入包装命令在 `handle` 内逐行回放）；
+  疑似导入 blob（`is_import_blob`）不转发；否则（已初始化）
+  `sp_channels.dispatch` 分发
 - **收到一个来电后发生什么**：`sp_call`（CC_IND/INCOMINGCALL，去重）
   → `sp_forward.notify_call` 入队 → 同一 `dispatch`（`msg.kind=="call"`
   渲染来电文案）；结束事件复位，120s 兜底定时器防卡死

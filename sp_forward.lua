@@ -1,7 +1,7 @@
 --[[
 @module  sp_forward
 @summary SmsPigeon 转发引擎（短信入口：命令分流 + 消息转发）
-@version 1.6
+@version 1.7
 @date    2026.09.11
 @usage
 本模块注册短信接收回调，是所有收到短信的唯一入口：
@@ -106,6 +106,18 @@ local function on_sms(num, txt, metas)
             log.info("sp_forward", "正文命中过滤词,丢弃短信", num)
             return
         end
+    end
+    -- 4. 导入内容防泄漏闸：疑似配置 blob（含 webhook token/白名单）
+    -- 绝不进入转发通道——手机转发预加"转发："、密码机上收到默认前缀
+    -- blob 等情形命令解析失败会落到此处。已授权发送者回格式提示，
+    -- 其余静默丢弃（防探测，与命令门禁一致）
+    if sp_commands.is_import_blob(txt) then
+        if sp_auth.check(cfg, num) then
+            sp_platform.send_sms(num, "ERROR:导入格式错误,首行须为 信鸽，导入配置")
+        else
+            log.warn("sp_forward", "疑似导入内容,未授权已丢弃", num)
+        end
+        return
     end
     enqueue_forward(num, txt)
 end

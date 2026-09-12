@@ -1,7 +1,7 @@
 --[[
 @module  sp_at
 @summary SmsPigeon 中文句子命令解析器（纯逻辑，零硬件依赖）
-@version 2.2
+@version 2.3
 @date    2026.09.11
 @usage
 把短信文本解析为结构化中文命令。前缀为"信鸽"，命令体为自然中文短语：
@@ -188,6 +188,9 @@ local PHRASES = {
     { "验证码",           "CODEP_READ" },
     -- 失败暂存重发
     { "重发",             "RETRY_NOW" },
+    -- 配置导出/导入（导出=可原样转发导入的命令回放清单）
+    { "导出配置",         "EXPORT" },
+    { "导入配置",         "IMPORT" },
     -- 通道配置
     { "查看转发",     "FWD_READ" },
     { "转发状态",     "FWD_READ" },
