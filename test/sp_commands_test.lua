@@ -560,6 +560,26 @@ contains(reply, "失败1", "超限计 1 条失败")
 contains(reply, "超出50行上限", "失败原因明示上限")
 send(ME, "信鸽，清除标识")
 
+-- 失败行按字节截断不得切断 UTF-8 序列（应答短信不得出现乱码尾字节）
+local function utf8_ok(s)
+    local i = 1
+    while i <= #s do
+        local b = s:byte(i)
+        local len = (b < 0x80 and 1) or (b >= 0xF0 and 4) or (b >= 0xE0 and 3)
+            or (b >= 0xC0 and 2) or nil
+        if not len or i + len - 1 > #s then return false end
+        for j = i + 1, i + len - 1 do
+            local c = s:byte(j)
+            if c < 0x80 or c > 0xBF then return false end
+        end
+        i = i + len
+    end
+    return true
+end
+is_cmd, reply = send(ME, "信鸽，导入配置\n设置心跳，二十四小时啊呀啊\n不是命令的整句话而已啊\n恢复出厂恢复出厂")
+contains(reply, "失败3", "三条失败行进入汇总")
+eq(utf8_ok(reply), true, "汇总应答不含被截断的UTF-8序列")
+
 -- 空导入
 is_cmd, reply = send(ME, "信鸽，导入配置")
 contains(reply, "ERROR:导入内容为空", "无命令行时报空")

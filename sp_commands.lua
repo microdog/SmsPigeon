@@ -796,6 +796,22 @@ local function benign_dup(reply)
         or reply:find("已在黑名单", 1, true) ~= nil
 end
 
+-- 按字节截断并剥掉不完整的 UTF-8 序列（失败行摘要用：裸 sub 会把
+-- 3 字节汉字拦腰切断，应答短信出现乱码尾字节）
+local function utf8_cut(s, n)
+    if #s <= n then return s end
+    local i = n
+    while i > 0 and s:byte(i) >= 0x80 and s:byte(i) <= 0xBF do
+        i = i - 1                                -- 回退到多字节引导字节处
+    end
+    if i > 0 then
+        local b = s:byte(i)
+        local len = (b >= 0xF0 and 4) or (b >= 0xE0 and 3) or (b >= 0xC0 and 2) or 1
+        if i + len - 1 > n then i = i - 1 end    -- 字符被截断，整体丢弃
+    end
+    return s:sub(1, i)
+end
+
 -- CMD_MAP 前置声明（导入执行器运行期查表，注册表在文件后段填充）
 local CMD_MAP = {}
 
@@ -887,21 +903,21 @@ local function cmd_import(cfg, text, sender)
                 end
                 if p == nil or p.cmd == nil then
                     fail = fail + 1
-                    fails[#fails + 1] = ln:sub(1, 10) .. " 非命令"
+                    fails[#fails + 1] = utf8_cut(ln, 10) .. " 非命令"
                 elseif not IMPORT_OK[p.cmd] or not CMD_MAP[p.cmd] then
                     fail = fail + 1
-                    fails[#fails + 1] = ln:sub(1, 10) .. " 不允许导入"
+                    fails[#fails + 1] = utf8_cut(ln, 10) .. " 不允许导入"
                 else
                     local rok, r = pcall(CMD_MAP[p.cmd].run, cfg, p.args, sender)
                     if not rok then
                         fail = fail + 1
-                        fails[#fails + 1] = ln:sub(1, 10) .. " 执行出错"
+                        fails[#fails + 1] = utf8_cut(ln, 10) .. " 执行出错"
                     elseif type(r) == "string" and r:sub(1, 5) == "ERROR" then
                         if benign_dup(r) then
                             skip = skip + 1
                         else
                             fail = fail + 1
-                            fails[#fails + 1] = ln:sub(1, 10) .. " " .. r:gsub("^ERROR:?", "")
+                            fails[#fails + 1] = utf8_cut(ln, 10) .. " " .. r:gsub("^ERROR:?", "")
                         end
                     else
                         okc = okc + 1
