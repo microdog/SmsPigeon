@@ -1,11 +1,13 @@
 # SmsPigeon 短信鸽
 
+> **⚠️ 强烈警告**：本项目仅供学习、研究与个人合法通信用途，**严禁**
+> 用于接码/收码平台、电信诈骗、绕过实名制、群发垃圾短信等任何非法
+> 用途。下载、编译、烧录、部署或分发本项目，即视为你已阅读、理解
+> 并同意文末「[免责声明](#免责声明)」的全部条款。
+
 基于 [Air780EHV](https://docs.openluat.com/air780ehv/product/) + [LuatOS](https://docs.openluat.com/osapi/) 的短信转发固件：把收到的短信转发到你的手机、钉钉、飞书、Server酱或企业微信。
 
 **全本地运行**是本项目的核心特性：配置、鉴权、控制全部通过短信完成，固件自身不连接任何远程管理 API——短信内容不经过第三方管理服务，配置只存在模块本地，最大程度保证隐私与安全。
-
-> ⚠️ 本项目仅供学习、研究与个人合法通信用途，使用前请阅读文末
-> 「[免责声明](#免责声明)」。
 
 ## 功能特性
 
@@ -328,6 +330,17 @@ AT+CCFC），而 Air780EHV 的 LuatOS 固件不暴露 USSD/CCFC 接口
 适用性与不侵权），亦不对任何人使用或滥用本项目造成的任何直接或
 间接后果承担责任。
 
+**下载、编译、烧录、部署、运行或分发本项目（含部分代码或衍生作品），
+即视为使用者已阅读、理解并无条件同意本声明全部条款；不同意者应立即
+停止使用并删除全部副本。**
+
+- 作者不为任何用途提供技术支持，尤其不接受与接码、批量卡管理、
+  验证码批量获取相关的咨询、issue 与功能请求；
+- 对任何滥用本项目从事违法活动的行为，作者与之不存在任何意思联络，
+  不承担任何责任，并将积极配合主管机关与司法机关的调查取证；
+- 本项目不是产品，不面向最终消费者销售或提供服务，作者不因开源
+  行为承担产品责任或服务提供者义务。
+
 **使用者必须遵守：**
 
 - 本项目**仅供学习、研究与个人合法通信用途**。严禁将本项目或其衍生
@@ -348,6 +361,17 @@ AT+CCFC），而 Air780EHV 的 LuatOS 固件不暴露 USSD/CCFC 接口
   部署前应自行确认并遵守当地规定；
 - 分发本项目或制作衍生作品时，须保留本免责声明与 [MIT 许可证](LICENSE)
   全文。
+
+---
+
+**NOTICE (English summary)**: This project is provided for personal,
+lawful, educational use only, "AS IS", without warranty of any kind.
+Using it for SMS verification-code farming, card fraud, identity
+verification circumvention, or spamming is STRICTLY PROHIBITED. Users
+are solely responsible for compliance with their carrier agreements
+(including IoT SIM card usage restrictions) and all applicable laws.
+Downloading, building, deploying, or redistributing this project
+constitutes acceptance of the full disclaimer above (in Chinese).
 
 ## 许可证
 
