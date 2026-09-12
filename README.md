@@ -372,6 +372,7 @@ are solely responsible for compliance with their carrier agreements
 (including IoT SIM card usage restrictions) and all applicable laws.
 Downloading, building, deploying, or redistributing this project
 constitutes acceptance of the full disclaimer above (in Chinese).
+ In case of any discrepancy, the Chinese version shall prevail.
 
 ## 许可证
 
