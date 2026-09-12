@@ -4,9 +4,9 @@ sp_call 来电提醒单元测试：CC_IND 事件驱动、同一来电去重、
 ]]
 
 local sp_config  = require "sp_config"
-local sp_forward = require "sp_forward"
-require "sp_chan_sms"                  -- 注册短信转发通道（dispatch 目标）
-local sp_call    = require "sp_call"   -- 加载期完成 CC_IND 订阅
+require "sp_forward"                 -- 加载期装配转发（sp_call 依赖）
+require "sp_chan_sms"                -- 注册短信转发通道（dispatch 目标）
+require "sp_call"                    -- 加载期完成 CC_IND 订阅
 
 local n = 0
 local function eq(got, want, msg)

@@ -830,11 +830,9 @@ local function cmd_export(cfg, args, sender)
     add(cfg.wl_on and "开启白名单" or "关闭白名单")
     for _, num in ipairs(cfg.whitelist) do add("增加白名单，" .. num) end
     if cfg.prefix ~= "" then add("设置前缀，" .. cfg.prefix) end
-    if cfg.identity == nil then
-        -- 自动模式 = 默认，不导出
-    elseif cfg.identity == "" then
+    if cfg.identity == "" then
         add("关闭标识")
-    else
+    elseif cfg.identity then
         add("设置标识，" .. cfg.identity)
     end
     local sms = cfg.fwd.sms

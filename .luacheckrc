@@ -15,4 +15,10 @@ globals = {
 unused_args = false
 
 max_line_length = 120
+
+-- 测试文件采用顺序断言风格：先赋值再断言、局部变量重复赋值/复用是刻意写法，
+-- 仅对 test/ 放宽这两类风格告警；源码保持零告警
+files["test"] = {
+    ignore = { "311", "411" },
+}
 cache = true

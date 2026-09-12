@@ -165,7 +165,6 @@ eq(#MOCKS.sent, 33, "关闭心跳有应答")
 eq(hb_timer(24), nil, "关闭后心跳定时器撤防")
 
 -- 过滤与统计：拉黑 → 来信被滤 → 统计可查 → 清零
-local sp_forward = require "sp_forward"
 MOCKS.sms_cb("13800138000", "信鸽，拉黑，10086")
 base = run_new_tasks(base)
 MOCKS.sms_cb("10086", "被拉黑的来信")

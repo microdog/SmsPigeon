@@ -286,7 +286,8 @@ contains(reply, "OK", "纯key配置企业微信")
 eq(sp_config.get().fwd.wecom.key, "693a91f6-7aoc-4bc4-97a0-0ec2sifa5aaa", "key已保存")
 eq(sp_config.get().fwd.wecom.on, true, "设置后自动开启")
 
-is_cmd, reply = send(ME, "信鸽，设置企业微信，https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=71017f82-e027-4c5d-a618-eb4ee01750e9")
+is_cmd, reply = send(ME, "信鸽，设置企业微信，"
+    .. "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=71017f82-e027-4c5d-a618-eb4ee01750e9")
 contains(reply, "OK", "完整webhook配置企业微信")
 eq(sp_config.get().fwd.wecom.key, "71017f82-e027-4c5d-a618-eb4ee01750e9", "从URL抽取key")
 
